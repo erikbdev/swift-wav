@@ -1,7 +1,9 @@
 public struct Track<T: Sound>: Timeline {
-  let content: T
+  public var body: Never {
+    bodyFatalError(Never.self)
+  }
 
-  public var body: Never { fatalError("Tried to access `body` of type Never") }
+  let content: T
 
   public init(@ContentBuilder content: () -> T) {
     self.content = content()

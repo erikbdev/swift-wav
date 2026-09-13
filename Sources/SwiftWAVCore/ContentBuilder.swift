@@ -22,9 +22,11 @@ public enum ContentBuilder {
 }
 
 public struct TupleContent<each T> {
-  let content: (repeat each T)
+  public var body: Never {
+    bodyFatalError(Never.self)
+  }
 
-  public var body: Never { fatalError("tried to access body of type `Never`") }
+  let content: (repeat each T)
 }
 
 public struct _ConditionalContent<T, S> {
@@ -33,9 +35,11 @@ public struct _ConditionalContent<T, S> {
     case falseContent(S)
   }
 
-  let conditional: Conditional
+  public var body: Never {
+    bodyFatalError(Never.self)
+  }
 
-  public var body: Never { fatalError("tried to access body of type `Never`") }
+  let conditional: Conditional
 
   init(trueContent: T) {
     self.conditional = .trueContent(trueContent)

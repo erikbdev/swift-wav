@@ -1,5 +1,7 @@
 public struct Sample: Sound {
-  public var body: Never { fatalError("Tried to access `body` of type Never") }
+  public var body: Never {
+    bodyFatalError(Never.self)
+  }
 
   public init(_ name: String) {
 

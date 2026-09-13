@@ -1,5 +1,9 @@
 public struct EmptyContent {
-  public typealias Body = Never
+  public var body: Never {
+    bodyFatalError(Never.self)
+  }
 
-  public var body: Never { fatalError("tried to access body of type `Never`") }
+  public init() {
+
+  }
 }
