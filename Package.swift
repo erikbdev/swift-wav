@@ -6,17 +6,21 @@ import PackageDescription
 let package = Package(
   name: "swift-wav",
   products: [
-    // Products define the executables and libraries a package produces, making them visible to other packages.
     .library(
       name: "SwiftWAVCore",
       targets: ["SwiftWAVCore"]
     )
   ],
+  dependencies: [
+    .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.25.0")
+  ],
   targets: [
-    // Targets are the basic building blocks of a package, defining a module or a test suite.
-    // Targets can depend on other targets in this package and products from dependencies.
-    .target(
-      name: "SwiftWAVCore"
+    .target(name: "SwiftWAVCore"),
+    .executableTarget(
+      name: "SwiftWAVWeb",
+      dependencies: [
+        .product(name: "Hummingbird", package: "hummingbird")
+      ]
     ),
     .testTarget(
       name: "SwiftWAVCoreTests",
