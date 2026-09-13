@@ -1,5 +1,5 @@
 public protocol Song {
-  associatedtype Body: Sound
+  associatedtype Body: Timeline
 
   var configuration: Configuration { get }
 
@@ -20,4 +20,3 @@ public struct Configuration: Hashable, Sendable {
     self.tempo = tempo
   }
 }
-

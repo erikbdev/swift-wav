@@ -4,8 +4,10 @@ import Testing
 
 @Test func example() async throws {
   struct SandstormSong: Song {
-    var body: some Sound {
-      EmptyContent()
+    var body: some Timeline {
+      Track {
+        Sample("kick.wav")
+      }
     }
   }
 }
