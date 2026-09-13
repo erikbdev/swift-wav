@@ -1,5 +1,5 @@
 {
-  "originHash" : "568bd0a017784080ab6f09639f3d250d41a65f397d5146ce43cb2c034ca99b7b",
+  "originHash" : "8cf68023469bb7b1d29ca8a61de6221391e2cc6a1cf0d7dce475ed6f6b62d0c4",
   "pins" : [
     {
       "identity" : "async-http-client",
@@ -8,6 +8,15 @@
       "state" : {
         "revision" : "f95c908967e98c68c5ce3fd61a7974e7e869e303",
         "version" : "1.36.1"
+      }
+    },
+    {
+      "identity" : "elementary",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/elementary-swift/elementary.git",
+      "state" : {
+        "revision" : "f0141ba98c0f3ec9eeaee40fb4bffd1427482a1d",
+        "version" : "0.8.1"
       }
     },
     {
@@ -20,12 +29,30 @@
       }
     },
     {
+      "identity" : "hummingbird-elementary",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/hummingbird-community/hummingbird-elementary.git",
+      "state" : {
+        "revision" : "3b1399c6f6bca28ca3efee1904737cb3e3f6a9c8",
+        "version" : "0.5.1"
+      }
+    },
+    {
       "identity" : "swift-algorithms",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-algorithms.git",
       "state" : {
         "revision" : "87e50f483c54e6efd60e885f7f5aa946cee68023",
         "version" : "1.2.1"
+      }
+    },
+    {
+      "identity" : "swift-argument-parser",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-argument-parser.git",
+      "state" : {
+        "revision" : "6a52f3251125d74daf04fcbd5e6f08a75d074382",
+        "version" : "1.8.2"
       }
     },
     {
