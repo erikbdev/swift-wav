@@ -9,14 +9,15 @@ public protocol Song {
 
 extension Song {
   public var configuration: Configuration {
-    Configuration(tempo: 120)
+    Configuration(tempo: 120 / 4)
   }
 }
 
 public struct Configuration: Hashable, Sendable {
-  public let tempo: UInt
+  public let tempo: Double
 
-  public init(tempo: UInt) {
+  public init(tempo: Double) {
     self.tempo = tempo
   }
 }
+

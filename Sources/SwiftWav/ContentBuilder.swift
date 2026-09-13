@@ -1,21 +1,15 @@
 @resultBuilder
-public enum ContentBuilder {}
-
-public struct EmptyContent {
-  public typealias Body = Never
-
-  public var body: Never { fatalError("tried to access body of type `Never`") }
+public enum ContentBuilder {
+  public static func buildBlock() -> EmptyContent {
+    EmptyContent()
+  }
 }
-
-extension EmptyContent: Sound {}
 
 public struct _TupleContent<each T> {
   let content: (repeat each T)
 
   public var body: Never { fatalError("tried to access body of type `Never`") }
 }
-
-extension _TupleContent: Sound where repeat each T: Sound {}
 
 public struct _ConditionalContent<T, S> {
   enum Conditional {
@@ -35,5 +29,3 @@ public struct _ConditionalContent<T, S> {
     self.conditional = .`false`(falseContent)
   }
 }
-
-extension _ConditionalContent: Sound where T: Sound, S: Sound {}

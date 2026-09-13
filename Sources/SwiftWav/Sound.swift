@@ -9,10 +9,6 @@ extension Never: Sound {}
 
 /// `Sound` result builder
 extension ContentBuilder {
-  public static func buildBlock() -> EmptyContent {
-    EmptyContent()
-  }
-
   public static func buildBlock<S: Sound>(_ component: S) -> S {
     component
   }
@@ -30,3 +26,6 @@ extension ContentBuilder {
   }
 }
 
+extension EmptyContent: Sound {}
+extension _TupleContent: Sound where repeat each T: Sound {}
+extension _ConditionalContent: Sound where T: Sound, S: Sound {}
