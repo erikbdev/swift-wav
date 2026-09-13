@@ -1,6 +1,6 @@
 public struct Track<T: Sound>: Timeline {
   public var body: Never {
-    bodyFatalError(Never.self)
+    accessNeverBodyFatalError(Self.self)
   }
 
   let content: T

@@ -1,6 +1,6 @@
 public struct Pattern<T: Sound>: Sound {
   public var body: Never {
-    bodyFatalError(Never.self)
+    accessNeverBodyFatalError(Self.self)
   }
 
   let content: T

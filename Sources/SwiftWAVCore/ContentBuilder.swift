@@ -35,7 +35,7 @@ public enum ContentBuilder {
 
 public struct TupleContent<each T> {
   public var body: Never {
-    bodyFatalError(Never.self)
+    accessNeverBodyFatalError(Never.self)
   }
 
   let content: (repeat each T)
@@ -52,7 +52,7 @@ public struct _ConditionalContent<T, S> {
   }
 
   public var body: Never {
-    bodyFatalError(Never.self)
+    accessNeverBodyFatalError(Self.self)
   }
 
   let content: Content
@@ -62,7 +62,7 @@ public struct _ArrayContent<T> {
   let content: [T]
 
   public var body: Never {
-    bodyFatalError(Never.self)
+    accessNeverBodyFatalError(Self.self)
   }
 }
 
@@ -70,7 +70,7 @@ public struct _OptionalContent<T> {
   let content: T?
 
   public var body: Never {
-    bodyFatalError(Never.self)
+    accessNeverBodyFatalError(Self.self)
   }
 
   init(_ content: T?) {

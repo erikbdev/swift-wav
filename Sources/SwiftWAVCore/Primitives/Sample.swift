@@ -1,6 +1,6 @@
 public struct Sample: Sound {
   public var body: Never {
-    bodyFatalError(Never.self)
+    accessNeverBodyFatalError(Self.self)
   }
 
   public init(_ name: String) {

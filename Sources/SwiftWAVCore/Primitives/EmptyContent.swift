@@ -1,9 +1,7 @@
 public struct EmptyContent {
   public var body: Never {
-    bodyFatalError(Never.self)
+    accessNeverBodyFatalError(Self.self)
   }
 
-  public init() {
-
-  }
+  public init() {}
 }
