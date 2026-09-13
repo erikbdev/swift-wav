@@ -8,8 +8,8 @@ public enum ContentBuilder {
     component
   }
 
-  public static func buildBlock<each T>(_ component: repeat each T) -> _TupleContent<repeat each T> {
-    _TupleContent<repeat each T>(content: (repeat each component))
+  public static func buildBlock<each T>(_ component: repeat each T) -> TupleContent<repeat each T> {
+    TupleContent<repeat each T>(content: (repeat each component))
   }
 
   public static func buildEither<T, S>(first component: T) -> _ConditionalContent<T, S> {
@@ -21,7 +21,7 @@ public enum ContentBuilder {
   }
 }
 
-public struct _TupleContent<each T> {
+public struct TupleContent<each T> {
   let content: (repeat each T)
 
   public var body: Never { fatalError("tried to access body of type `Never`") }
@@ -29,8 +29,8 @@ public struct _TupleContent<each T> {
 
 public struct _ConditionalContent<T, S> {
   enum Conditional {
-    case `true`(T)
-    case `false`(S)
+    case trueContent(T)
+    case falseContent(S)
   }
 
   let conditional: Conditional
@@ -38,10 +38,10 @@ public struct _ConditionalContent<T, S> {
   public var body: Never { fatalError("tried to access body of type `Never`") }
 
   init(trueContent: T) {
-    self.conditional = .`true`(trueContent)
+    self.conditional = .trueContent(trueContent)
   }
 
   init(falseContent: S) {
-    self.conditional = .`false`(falseContent)
+    self.conditional = .falseContent(falseContent)
   }
 }
