@@ -5,10 +5,10 @@ import Testing
 @Test func example() async throws {
   struct CrabSong: Song {
     var body: some Timeline {
-      Track("drums") {
+      Track("Drums") {
         Sample("kick-01.wav")
       }
-      Track("synth") {
+      Track("Synth") {
         Sample("synth-01.wav")
       }
     }
