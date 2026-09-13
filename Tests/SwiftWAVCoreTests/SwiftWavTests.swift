@@ -3,7 +3,7 @@ import Testing
 @testable import SwiftWAVCore
 
 @Test func example() async throws {
-  struct SandstormSong: Song {
+  struct CrabSong: Song {
     var body: some Timeline {
       Track("drums") {
         Sample("kick-01.wav")
