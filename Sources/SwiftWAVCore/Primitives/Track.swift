@@ -5,7 +5,7 @@ public struct Track<T: Sound>: Timeline {
 
   let content: T
 
-  public init(@ContentBuilder content: () -> T) {
+  public init(_ name: String? = nil, @ContentBuilder content: () -> T) {
     self.content = content()
   }
 }
