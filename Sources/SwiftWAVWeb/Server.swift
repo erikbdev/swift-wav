@@ -1,5 +1,6 @@
 import ArgumentParser
 import Hummingbird
+import HummingbirdElementary
 import Logging
 
 @main
@@ -24,14 +25,17 @@ struct Server: AsyncParsableCommand {
     }
 
     // Middlewares
-    router.addMiddleware {
-      #if DEBUG
+    #if DEBUG
+      router.addMiddleware {
         CORSMiddleware(allowOrigin: .all)
         TracingMiddleware()
-      #endif
+      }
+    #endif
 
-      // PublicFilesMiddleware()
-      ServerRoutingMiddleware()
+    router.get("/") { _, _ in
+      HTMLResponse {
+        MainPage()
+      }
     }
 
     // TODO: support h2c for h1/h2.

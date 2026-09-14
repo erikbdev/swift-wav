@@ -30,9 +30,6 @@ let package = Package(
         .product(name: "Hummingbird", package: "hummingbird"),
         .product(name: "HummingbirdRouter", package: "hummingbird"),
         .product(name: "HummingbirdElementary", package: "hummingbird-elementary"),
-      ],
-      resources: [
-        .copy("Resources")
       ]
     ),
     .testTarget(
