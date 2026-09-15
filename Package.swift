@@ -5,6 +5,7 @@ import PackageDescription
 
 let package = Package(
   name: "swift-wav",
+  platforms: [.macOS(.v14)],
   products: [
     .library(
       name: "SwiftWAVCore",

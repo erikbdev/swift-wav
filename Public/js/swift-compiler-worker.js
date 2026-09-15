@@ -21,12 +21,11 @@ let sysrootPromise = null;
 
 // ---------- Download progress ----------
 //
-// The server sends these as plain gzip bodies (no Content-Encoding header),
-// so `content-length` and the bytes we read from the stream are both the
-// same ~74MB-total wire size — unlike transparent Content-Encoding: gzip,
-// where fetch() would hand us already-inflated bytes and desync the
-// progress count from the header total. We inflate ourselves afterwards via
-// DecompressionStream, once progress has already been measured.
+// The server sends precompressed Brotli (with gzip/raw fallbacks) using
+// Content-Encoding. Fetch transparently decodes the response before this
+// worker sees it, so there is no client-side decompressor here. Encoded
+// Content-Length is not a valid total for the decoded stream; the UI therefore
+// treats progress for encoded responses as indeterminate.
 
 /** @type {Map<string, {loaded: number, total: number}>} */
 const downloadProgress = new Map();
@@ -43,20 +42,23 @@ function reportDownloadProgress(onProgress) {
 }
 
 /**
- * Fetches a gzipped `url`, reporting cumulative byte progress across all
- * in-flight fetches, and returns a Response over the *inflated* bytes with
- * `contentType` set (needed for WebAssembly.compileStreaming).
+ * Fetches a toolchain artifact, reporting cumulative decoded-byte progress
+ * across all in-flight fetches, and returns a Response with `contentType` set
+ * (needed for WebAssembly.compileStreaming).
  */
-function fetchGzipWithProgress(url, onProgress, contentType) {
+function fetchToolchainWithProgress(url, onProgress, contentType) {
   downloadProgress.set(url, { loaded: 0, total: 0 });
   return fetch(url).then((res) => {
     if (!res.ok) throw new Error(`fetching ${url} failed: ${res.status}`);
-    const total = Number(res.headers.get("content-length")) || 0;
+    const total = res.headers.has("content-encoding")
+      ? 0
+      : Number(res.headers.get("content-length")) || 0;
     downloadProgress.set(url, { loaded: 0, total });
     reportDownloadProgress(onProgress);
 
+    if (!res.body) throw new Error(`fetching ${url} returned an empty body`);
     const reader = res.body.getReader();
-    const trackedGzipStream = new ReadableStream({
+    const trackedStream = new ReadableStream({
       async pull(controller) {
         const { done, value } = await reader.read();
         if (done) {
@@ -72,14 +74,13 @@ function fetchGzipWithProgress(url, onProgress, contentType) {
       },
     });
 
-    const inflated = trackedGzipStream.pipeThrough(new DecompressionStream("gzip"));
-    return new Response(inflated, contentType ? { headers: { "Content-Type": contentType } } : undefined);
+    return new Response(trackedStream, contentType ? { headers: { "Content-Type": contentType } } : undefined);
   });
 }
 
 function compileModuleOnce(getPromise, setPromise, url, onProgress) {
   if (getPromise()) return getPromise();
-  const promise = fetchGzipWithProgress(url, onProgress, "application/wasm")
+  const promise = fetchToolchainWithProgress(url, onProgress, "application/wasm")
     .then((res) => WebAssembly.compileStreaming(res))
     .catch((err) => {
       setPromise(null);
@@ -206,7 +207,7 @@ function untar(buffer) {
 
 function getSysroot(onProgress) {
   if (!sysrootPromise) {
-    sysrootPromise = fetchGzipWithProgress(`${TOOLCHAIN_BASE}/swift-sysroot-core.tar`, onProgress)
+    sysrootPromise = fetchToolchainWithProgress(`${TOOLCHAIN_BASE}/swift-sysroot-core.tar`, onProgress)
       .then((res) => res.arrayBuffer())
       .then((buf) => untar(buf))
       .catch((err) => {

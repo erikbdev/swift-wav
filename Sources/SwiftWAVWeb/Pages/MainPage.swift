@@ -813,9 +813,9 @@ struct MainPage: HTMLDocument {
           }
         }
 
-        // Kick off the ~74MB (gzip-compressed) toolchain download as soon as
-        // the page loads, rather than waiting for the first Run click. The
-        // button stays disabled until it lands.
+        // Kick off the precompressed toolchain download as soon as the page
+        // loads, rather than waiting for the first Run click. The button
+        // stays disabled until it lands.
         function preloadToolchain() {
           if (runBtn) runBtn.disabled = true;
           setRunLabel("Downloading runtime…");
@@ -832,7 +832,7 @@ struct MainPage: HTMLDocument {
               if (data.total > 0) {
                 setRunLabel(`Downloading runtime… ${formatMB(data.loaded)}/${formatMB(data.total)}MB`);
               } else {
-                setRunLabel(`Downloading runtime… ${formatMB(data.loaded)}MB`);
+                setRunLabel("Downloading runtime…");
               }
               return;
             }
@@ -884,6 +884,8 @@ struct MainPage: HTMLDocument {
             if (data.type === "download-progress") {
               if (data.total > 0) {
                 setRunLabel(`Downloading runtime… ${formatMB(data.loaded)}/${formatMB(data.total)}MB`);
+              } else {
+                setRunLabel("Downloading runtime…");
               }
               return;
             }
