@@ -32,6 +32,41 @@ struct Server: AsyncParsableCommand {
       }
     #endif
 
+    // Serves Public/ as static files (the compiler worker JS, etc).
+    router.addMiddleware {
+      FileMiddleware("Public")
+    }
+
+    // The swift-toolchain-wasm artifacts (fetched via
+    // scripts/fetch-toolchain.sh) that the in-browser Swift compiler worker
+    // fetches, kept gzipped on disk and streamed as-is: the browser
+    // transfers ~74MB instead of ~300MB. No `Content-Encoding` header here
+    // deliberately — the worker inflates these itself via
+    // DecompressionStream so it can measure download progress against the
+    // same wire-byte units as `Content-Length` (with transparent
+    // Content-Encoding: gzip, fetch() hands JS already-inflated bytes,
+    // which desyncs a byte-counted progress bar from the compressed total).
+    // They're pinned to one release, so it's safe to cache for a long time.
+    let toolchainFileIO = FileIO()
+    let toolchainFiles: [(route: String, gzPath: String)] = [
+      ("swift-frontend.wasm", "Public/toolchain/swift-frontend.wasm.gz"),
+      ("wasm-ld.wasm", "Public/toolchain/wasm-ld.wasm.gz"),
+      ("swift-sysroot-core.tar", "Public/toolchain/swift-sysroot-core.tar.gz"),
+    ]
+    for file in toolchainFiles {
+      router.get("/toolchain/\(file.route)") { _, context in
+        let body = try await toolchainFileIO.loadFile(path: file.gzPath, context: context)
+        return Response(
+          status: .ok,
+          headers: [
+            .contentType: "application/gzip",
+            .cacheControl: "public, max-age=31536000, immutable",
+          ],
+          body: body
+        )
+      }
+    }
+
     router.get("/") { _, _ in
       HTMLResponse {
         MainPage()

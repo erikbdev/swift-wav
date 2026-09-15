@@ -6,3 +6,6 @@ DerivedData/
 .swiftpm/configuration/registries.json
 .swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
 .netrc
+
+# Swift-toolchain-wasm artifacts (fetched by scripts/fetch-toolchain.sh, ~300MB, not committed)
+/Public/toolchain/

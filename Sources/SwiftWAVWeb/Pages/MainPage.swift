@@ -401,6 +401,23 @@ struct MainPage: HTMLDocument {
           font-family: var(--mono);
         }
 
+        .panel-content.output {
+          display: block;
+          align-items: initial;
+          justify-content: initial;
+          text-align: left;
+          overflow-y: auto;
+          white-space: pre-wrap;
+          word-break: break-word;
+          font-family: var(--mono);
+          font-size: 11.5px;
+          line-height: 1.5;
+        }
+        .panel-content .out-line { color: var(--text-0); }
+        .panel-content .out-line.stderr { color: var(--red); }
+        .panel-content .out-line.diagnostic { color: var(--amber); }
+        .panel-content .out-line.status { color: var(--text-2); font-style: italic; }
+
         @media (max-width: 800px) {
           .body { flex-direction: column; }
           .sidebar { width: 100%; }
@@ -417,29 +434,31 @@ struct MainPage: HTMLDocument {
         div(.class("tb-spacer")) {}
         button(.class("tb-btn run"), .type(.button)) {
           span(.class("tb-ico")) { "▶" }
-          span { "Run" }
+          span(.id("run-label")) { "Run" }
         }
       }
       div(.class("body")) {
-        nav(.class("activity")) {
-          div(.class("activity-icon active"), .title("Files")) { "📄" }
-          div(.class("activity-icon"), .title("Search")) { "🔍" }
-          div(.class("activity-icon"), .title("Settings")) { "⚙" }
-        }
-        aside(.id("file-sidebar"), .class("sidebar")) {}
+        // TODO: work this out later.
+        //
+        // nav(.class("activity")) {
+        //   div(.class("activity-icon active"), .title("Files")) { "📄" }
+        //   div(.class("activity-icon"), .title("Search")) { "🔍" }
+        //   div(.class("activity-icon"), .title("Settings")) { "⚙" }
+        // }
+        // aside(.id("file-sidebar"), .class("sidebar")) {}
         div(.class("editor-container")) {
           div(.id("tab-bar"), .class("tabbar")) {}
           div(.id("cm-host"), .class("cm-host")) {}
         }
         aside(.id("preview-pane"), .class("preview")) {
           div(.class("panel-summary")) { "RESULTS" }
-          div(.class("panel-content")) { "Run your code to hear it play." }
+          div(.id("preview-content"), .class("panel-content")) { "Run your code to hear it play." }
         }
       }
       div(.class("statusbar")) {
         span { "swift-wav" }
         span(.class("status-spacer")) {}
-        span { "Ready" }
+        span(.id("status-text")) { "Ready" }
       }
     }
     script(.type(.module)) {
@@ -750,6 +769,157 @@ struct MainPage: HTMLDocument {
           mountEditor();
           render();
         }
+
+        // ---------- In-browser Swift compilation ----------
+
+        const runBtn = document.querySelector(".tb-btn.run");
+        const runLabelEl = document.getElementById("run-label");
+        const statusEl = document.getElementById("status-text");
+        const outputEl = document.getElementById("preview-content");
+
+        let worker = null;
+        let nextRequestId = 0;
+        let running = false;
+        let toolchainReady = false;
+
+        function getWorker() {
+          if (!worker) {
+            worker = new Worker("/js/swift-compiler-worker.js", { type: "module" });
+          }
+          return worker;
+        }
+
+        function setStatus(text) {
+          if (statusEl) statusEl.textContent = text;
+        }
+
+        function setRunLabel(text) {
+          if (runLabelEl) runLabelEl.textContent = text;
+        }
+
+        function formatMB(bytes) {
+          return (bytes / (1024 * 1024)).toFixed(1);
+        }
+
+        function renderOutput(lines) {
+          if (!outputEl) return;
+          outputEl.classList.add("output");
+          outputEl.innerHTML = "";
+          for (const { text, kind } of lines) {
+            const div = document.createElement("div");
+            div.className = "out-line" + (kind ? ` ${kind}` : "");
+            div.textContent = text;
+            outputEl.appendChild(div);
+          }
+        }
+
+        // Kick off the ~74MB (gzip-compressed) toolchain download as soon as
+        // the page loads, rather than waiting for the first Run click. The
+        // button stays disabled until it lands.
+        function preloadToolchain() {
+          if (runBtn) runBtn.disabled = true;
+          setRunLabel("Downloading runtime…");
+          setStatus("Downloading Swift toolchain…");
+
+          const id = ++nextRequestId;
+          const w = getWorker();
+
+          const onMessage = (event) => {
+            const data = event.data;
+            if (data.id !== id) return;
+
+            if (data.type === "preload-progress") {
+              if (data.total > 0) {
+                setRunLabel(`Downloading runtime… ${formatMB(data.loaded)}/${formatMB(data.total)}MB`);
+              } else {
+                setRunLabel(`Downloading runtime… ${formatMB(data.loaded)}MB`);
+              }
+              return;
+            }
+
+            w.removeEventListener("message", onMessage);
+            if (data.type === "preload-done") {
+              toolchainReady = data.ok;
+              if (data.ok) {
+                setRunLabel("Run");
+                setStatus("Ready");
+                if (runBtn) runBtn.disabled = false;
+              } else {
+                setRunLabel("Run (retry download)");
+                setStatus("Toolchain download failed");
+                renderOutput([{ text: `Failed to download Swift toolchain: ${data.error}`, kind: "stderr" }]);
+                if (runBtn) runBtn.disabled = false;
+              }
+            }
+          };
+
+          w.addEventListener("message", onMessage);
+          w.postMessage({ id, type: "preload" });
+        }
+
+        function runCurrentFile() {
+          if (running) return;
+          if (!workspace.active) {
+            renderOutput([{ text: "No file open.", kind: "stderr" }]);
+            return;
+          }
+
+          running = true;
+          if (runBtn) runBtn.disabled = true;
+          setStatus("Compiling…");
+          renderOutput([{ text: "Compiling…", kind: "status" }]);
+
+          const id = ++nextRequestId;
+          const w = getWorker();
+
+          const onMessage = (event) => {
+            const data = event.data;
+            if (data.id !== id) return;
+
+            if (data.type === "progress") {
+              setStatus(data.message);
+              renderOutput([{ text: data.message, kind: "status" }]);
+              return;
+            }
+            if (data.type === "download-progress") {
+              if (data.total > 0) {
+                setRunLabel(`Downloading runtime… ${formatMB(data.loaded)}/${formatMB(data.total)}MB`);
+              }
+              return;
+            }
+
+            w.removeEventListener("message", onMessage);
+            running = false;
+            toolchainReady = true;
+            setRunLabel("Run");
+            if (runBtn) runBtn.disabled = false;
+
+            const lines = [];
+            for (const text of data.diagnostics ?? []) lines.push({ text, kind: "diagnostic" });
+            for (const text of data.stdout ?? []) lines.push({ text, kind: "stdout" });
+            for (const text of data.stderr ?? []) lines.push({ text, kind: "stderr" });
+
+            if (data.ok) {
+              setStatus("Ready");
+              if (lines.length === 0) lines.push({ text: "Program produced no output.", kind: "status" });
+            } else {
+              setStatus(`Failed (${data.stage ?? "unknown"})`);
+              if (lines.length === 0) lines.push({ text: `Compilation failed at stage: ${data.stage}`, kind: "stderr" });
+            }
+            renderOutput(lines);
+          };
+
+          w.addEventListener("message", onMessage);
+          w.postMessage({
+            id,
+            type: "compile",
+            files: { ...workspace.files },
+            primaryFile: workspace.active,
+          });
+        }
+
+        if (runBtn) runBtn.addEventListener("click", runCurrentFile);
+        preloadToolchain();
         """
       )
     }
