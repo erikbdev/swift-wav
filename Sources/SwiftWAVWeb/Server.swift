@@ -40,6 +40,7 @@ struct Server: AsyncParsableCommand {
     // Serve the precompressed toolchain variant the browser supports.
     let toolchainFileIO = FileIO()
     let toolchainFiles: [(route: String, contentType: String)] = [
+      ("swift-ide-test.wasm", "application/wasm"),
       ("swift-frontend.wasm", "application/wasm"),
       ("wasm-ld.wasm", "application/wasm"),
       ("swift-sysroot-core.tar", "application/x-tar"),
