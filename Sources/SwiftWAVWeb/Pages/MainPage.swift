@@ -763,6 +763,7 @@ struct MainPage: HTMLDocument {
         } from "https://esm.sh/@codemirror/view@6.43.11?deps=@codemirror/state@6.7.0";
         import { defaultKeymap, history, historyKeymap } from "https://esm.sh/@codemirror/commands@6.10.3?deps=@codemirror/language@6.12.4,@codemirror/state@6.7.0,@codemirror/view@6.43.11,@lezer/highlight@1.2.3";
         import { HighlightStyle, syntaxHighlighting } from "https://esm.sh/@codemirror/language@6.12.4?deps=@codemirror/state@6.7.0,@codemirror/view@6.43.11,@lezer/highlight@1.2.3";
+        import { autocompletion } from "https://esm.sh/@codemirror/autocomplete@6.18.7?deps=@codemirror/language@6.12.4,@codemirror/state@6.7.0,@codemirror/view@6.43.11,@lezer/highlight@1.2.3";
         // Keep the language package on the same CodeMirror module instances as
         // the editor. Without this, esm.sh may resolve its broad peer ranges to
         // newer copies, and CodeMirror rejects extensions from the other copy.
@@ -912,6 +913,7 @@ struct MainPage: HTMLDocument {
                 },
               ]),
               swift(),
+              autocompletion({ override: [swiftCompletionSource] }),
               syntaxHighlighting(studioHighlight),
               studioTheme,
               EditorView.updateListener.of(({ docChanged, state }) => {
@@ -1057,6 +1059,64 @@ struct MainPage: HTMLDocument {
             worker = new Worker("/js/swift-compiler-worker.js", { type: "module" });
           }
           return worker;
+        }
+
+        // ---------- Code completion (swift-ide-test) ----------
+
+        // Asks the worker to run swift-ide-test's code-completion pass at a
+        // UTF-16 offset into the active file, returning a flat item list.
+        function fetchCompletions(pos) {
+          return new Promise((resolve, reject) => {
+            const id = ++nextRequestId;
+            const w = getWorker();
+            const doc = workspace.files[workspace.active] ?? "";
+            const byteOffset = new TextEncoder().encode(doc.slice(0, pos)).length;
+
+            const onMessage = (event) => {
+              const data = event.data;
+              if (data.id !== id || data.type !== "completion-result") return;
+              w.removeEventListener("message", onMessage);
+              if (data.ok) resolve(data.items);
+              else reject(new Error(data.error || "code completion failed"));
+            };
+            w.addEventListener("message", onMessage);
+            w.postMessage({
+              id,
+              type: "complete",
+              files: { ...workspace.files },
+              primaryFile: workspace.active,
+              offset: byteOffset,
+            });
+          });
+        }
+
+        // CodeMirror @codemirror/autocomplete completion source. Triggers on
+        // identifier prefixes and explicit invocation (e.g. Ctrl+Space); "."
+        // member-access completion is left for later since it needs a richer
+        // signal than a plain word match.
+        async function swiftCompletionSource(context) {
+          const word = context.matchBefore(/[A-Za-z_][A-Za-z0-9_]*/);
+          if (!word && !context.explicit) return null;
+          if (word && word.from === word.to && !context.explicit) return null;
+          if (!workspace.active) return null;
+
+          let items;
+          try {
+            items = await fetchCompletions(context.pos);
+          } catch {
+            return null;
+          }
+          if (!items.length) return null;
+
+          return {
+            from: word ? word.from : context.pos,
+            options: items.map((item) => ({
+              label: item.label,
+              detail: item.detail,
+              type: item.kind,
+            })),
+            validFor: /^[A-Za-z_][A-Za-z0-9_]*$/,
+          };
         }
 
         function setStatus(text) {

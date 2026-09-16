@@ -16,6 +16,8 @@ const TOOLCHAIN_BASE = "/toolchain";
 let frontendModulePromise = null;
 /** @type {Promise<WebAssembly.Module> | null} */
 let linkerModulePromise = null;
+/** @type {Promise<WebAssembly.Module> | null} */
+let ideTestModulePromise = null;
 /** @type {Promise<Directory> | null} */
 let sysrootPromise = null;
 
@@ -99,6 +101,19 @@ function getLinkerModule(onProgress) {
     () => linkerModulePromise,
     (p) => (linkerModulePromise = p),
     `${TOOLCHAIN_BASE}/wasm-ld.wasm`,
+    onProgress
+  );
+}
+
+// swift-ide-test drives the same completion machinery SourceKit exposes to
+// editors, as a standalone CLI. It's a separate ~150MB module from
+// swift-frontend, so it's fetched lazily on the first completion request
+// rather than as part of the Run preload.
+function getIdeTestModule(onProgress) {
+  return compileModuleOnce(
+    () => ideTestModulePromise,
+    (p) => (ideTestModulePromise = p),
+    `${TOOLCHAIN_BASE}/swift-ide-test.wasm`,
     onProgress
   );
 }
@@ -383,6 +398,117 @@ async function compileAndRun(files, primaryFile, log, onProgress) {
   };
 }
 
+// ---------- Code completion via swift-ide-test ----------
+
+const COMPLETION_TOKEN = "COMPLETE";
+
+// Maps a "Decl[InstanceMethod]", "Keyword[func]", "Pattern/Local", etc. kind
+// tag (see CodeCompletionResult::printPrefix in the Swift compiler) to a
+// coarse CodeMirror-style completion type, used for icons/filtering.
+function completionKindFor(tag) {
+  if (tag.startsWith("Keyword")) return "keyword";
+  if (tag.startsWith("Decl[Module]")) return "namespace";
+  if (/\[(Class|Actor)\]/.test(tag)) return "class";
+  if (/\[(Struct|Enum|Protocol|TypeAlias|AssociatedType|GenericTypeParam)\]/.test(tag)) return "type";
+  if (tag.includes("[EnumElement]")) return "enum";
+  if (/\[(InstanceMethod|StaticMethod|FreeFunction|Constructor|Destructor|.*OperatorFunction)\]/.test(tag))
+    return "function";
+  if (/\[(InstanceVar|StaticVar|LocalVar|GlobalVar)\]/.test(tag)) return "variable";
+  return "text";
+}
+
+// Turns a completion string like "foo([#(x): Int#])[#Void#]" into readable
+// text by dropping swift-ide-test's placeholder/result-type delimiters
+// ("[#" ... "#]"), giving "foo((x): Int)Void".
+function stripCompletionMarkup(text) {
+  return text.replace(/\[#/g, "").replace(/#\]/g, "");
+}
+
+/**
+ * Parses swift-ide-test's `-code-completion` stdout. Each result line looks
+ * like:
+ *   Decl[InstanceMethod]/CurrModule:   foo([#(x): Int#])[#Void#]; name=foo(:)
+ * padded so the description starts at column 36 (see
+ * CodeCompletionResult::printPrefix). The description block runs up to the
+ * first "; name=" field, which is always emitted (and always last, since
+ * comments/sourcetext aren't requested here).
+ */
+function parseCompletionResults(stdoutLines) {
+  const text = stdoutLines.join("\n");
+  const beginIdx = text.indexOf("Begin completions");
+  if (beginIdx === -1) return [];
+  const endIdx = text.indexOf("End completions", beginIdx);
+  const block = text.slice(beginIdx, endIdx === -1 ? undefined : endIdx);
+
+  const items = [];
+  const seen = new Set();
+  for (const line of block.split("\n").slice(1)) {
+    if (!line.trim()) continue;
+    const sepIdx = line.indexOf(": ");
+    if (sepIdx === -1) continue;
+    const tag = line.slice(0, sepIdx);
+    const rest = line.slice(sepIdx + 2).replace(/^ +/, "");
+    const nameIdx = rest.lastIndexOf("; name=");
+    const completionText = nameIdx === -1 ? rest : rest.slice(0, nameIdx);
+    const name = nameIdx === -1 ? completionText : rest.slice(nameIdx + "; name=".length).trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    items.push({
+      label: name,
+      detail: stripCompletionMarkup(completionText),
+      kind: completionKindFor(tag),
+    });
+  }
+  return items;
+}
+
+/**
+ * Runs swift-ide-test's `-code-completion` at `offset` (a UTF-8 byte offset
+ * into `files[primaryFile]`) and returns the parsed completion list.
+ */
+async function completeAt(files, primaryFile, offset, log, onProgress) {
+  const [ideTestModule, sysroot] = await Promise.all([getIdeTestModule(onProgress), getSysroot(onProgress)]);
+
+  const source = files[primaryFile] ?? "";
+  const bytes = new TextEncoder().encode(source);
+  const clampedOffset = Math.max(0, Math.min(offset, bytes.length));
+  const withToken =
+    new TextDecoder().decode(bytes.subarray(0, clampedOffset)) +
+    `#^${COMPLETION_TOKEN}^#` +
+    new TextDecoder().decode(bytes.subarray(clampedOffset));
+
+  const build = new Directory(new Map());
+  build.contents.set(primaryFile, new File(new TextEncoder().encode(withToken)));
+
+  const sysrootPreopen = () => new PreopenDirectory("/sysroot", sysroot.contents);
+  const buildPreopen = () => new PreopenDirectory("/build", build.contents);
+
+  log("completing...");
+  const argv = [
+    "swift-ide-test",
+    "-code-completion",
+    "-source-filename",
+    `/build/${primaryFile}`,
+    `-code-completion-token=${COMPLETION_TOKEN}`,
+    "-target",
+    "wasm32-unknown-wasip1",
+    "-disable-objc-interop",
+    "-sdk",
+    "/sysroot/wasi-sysroot",
+    "-resource-dir",
+    "/sysroot/swift/lib/swift_static",
+    "-Xcc",
+    "-fimplicit-module-maps",
+    "-Xcc",
+    "-fmodules-cache-path=/build/module-cache",
+    "-module-name",
+    "main",
+  ];
+
+  const result = await runWasiCommand(ideTestModule, argv, [sysrootPreopen(), buildPreopen()]);
+  return { items: parseCompletionResults(result.stdout), diagnostics: result.stderr };
+}
+
 /** Downloads + compiles the three toolchain artifacts so a later `compile` is instant. */
 async function preloadToolchain(onProgress) {
   await Promise.all([getFrontendModule(onProgress), getLinkerModule(onProgress), getSysroot(onProgress)]);
@@ -400,6 +526,25 @@ self.onmessage = async (event) => {
       self.postMessage({ id, type: "preload-done", ok: true });
     } catch (err) {
       self.postMessage({ id, type: "preload-done", ok: false, error: String((err && err.message) || err) });
+    }
+    return;
+  }
+
+  if (type === "complete") {
+    const { files, primaryFile, offset } = event.data;
+    const log = (message) => self.postMessage({ id, type: "progress", message });
+    const onProgress = (loaded, total) => self.postMessage({ id, type: "download-progress", loaded, total });
+    try {
+      const { items, diagnostics } = await completeAt(files, primaryFile, offset, log, onProgress);
+      self.postMessage({ id, type: "completion-result", ok: true, items, diagnostics });
+    } catch (err) {
+      self.postMessage({
+        id,
+        type: "completion-result",
+        ok: false,
+        items: [],
+        error: String((err && err.stack) || err),
+      });
     }
     return;
   }
