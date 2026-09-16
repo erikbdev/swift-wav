@@ -1061,7 +1061,7 @@ struct MainPage: HTMLDocument {
 
         function getWorker() {
           if (!worker) {
-            worker = new Worker("/js/swift-compiler-worker.js", { type: "module" });
+            worker = new Worker("/js/swift.worker.js", { type: "module" });
           }
           return worker;
         }
