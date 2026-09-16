@@ -20,24 +20,28 @@ DEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/Public/toolchain"
 
 FILES=(
   "swift-frontend.wasm"
+  "swift-frontend.wasm.gz"
   "wasm-ld.wasm"
+  "wasm-ld.wasm.gz"
   "swift-sysroot-core.tar"
+  "swift-sysroot-core.tar.gz"
 )
 
 mkdir -p "$DEST_DIR"
 
 for name in "${FILES[@]}"; do
+  f="$DEST_DIR/$name"
   gz="$DEST_DIR/$name.gz"
 
-  if [[ -f "$gz" ]]; then
-    echo "== $name.gz already present, skipping"
+  if [[ -f "$f" ]]; then
+    echo "== $name already present, skipping"
     continue
   fi
 
-  echo "== fetching $name.gz"
-  curl -fL --progress-bar -o "$gz" "$BASE_URL/$name.gz"
+  echo "== fetching $name"
+  curl -fL --progress-bar -o "$f" "$BASE_URL/$name"
 
-  echo "== $name.gz ready ($(du -h "$gz" | cut -f1))"
+  echo "== $name ready ($(du -h "$gz" | cut -f1))"
 done
 
 echo "Toolchain artifacts are in $DEST_DIR"
