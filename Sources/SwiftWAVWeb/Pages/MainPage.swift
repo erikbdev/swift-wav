@@ -5,12 +5,6 @@ struct MainPage: HTMLDocument {
 
   var head: some HTML {
     meta(.name(.viewport), .content("width=device-width, initial-scale=1.0"))
-    link(.rel("preconnect"), .href("https://fonts.googleapis.com"))
-    link(.rel("preconnect"), .href("https://fonts.gstatic.com"), .crossorigin(.anonymous))
-    link(
-      .rel(.stylesheet),
-      .href("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap")
-    )
     style {
       HTMLRaw(
         /* css */
@@ -39,8 +33,8 @@ struct MainPage: HTMLDocument {
           --amber: #d6a04a;
           --red: #f0564a;
           --purple: #a884f0;
-          --sans: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
-          --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+          --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, sans-serif;
+          --mono: "CommitMono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
           --r-sm: 6px;
           --r-md: 9px;
           --r-lg: 13px;
@@ -50,7 +44,18 @@ struct MainPage: HTMLDocument {
           --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3), 0 1px 1px rgba(0, 0, 0, .18);
           --shadow-card: 0 6px 22px -8px rgba(0, 0, 0, .45), 0 2px 8px -3px rgba(0, 0, 0, .28);
         }
+
+        @font-face {
+          font-family: "CommitMono";
+          font-style: normal;
+          font-weight: 400 600;
+          font-display: swap;
+          line-height: 16px;
+          src: url("/fonts/CommitMono.woff2") format("woff2");
+        }
+
         * { box-sizing: border-box; }
+
         html, body {
           margin: 0;
           height: 100%;
