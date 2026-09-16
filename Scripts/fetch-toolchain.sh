@@ -15,12 +15,14 @@
 set -euo pipefail
 
 TAG="swift-6.3.3-wasm"
-BASE_URL="https://github.com/tothambrus11/swift-toolchain-wasm/releases/download/${TAG}"
+BASE_URL="https://github.com/erikbdev/swift-toolchain-wasm/releases/download/${TAG}"
 DEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/Public/toolchain"
 
 FILES=(
   "swift-frontend.wasm"
   "swift-frontend.wasm.gz"
+  "swift-ide-test.wasm"
+  "swift-ide-test.wasm.gz"
   "wasm-ld.wasm"
   "wasm-ld.wasm.gz"
   "swift-sysroot-core.tar"
