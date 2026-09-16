@@ -8,10 +8,19 @@
 // Runs in a Worker because compiling/linking these modules is slow enough to
 // jank the main thread.
 
-import { Directory, File, PreopenDirectory } from "https://esm.sh/@bjorn3/browser_wasi_shim@0.4.2";
+import { Directory, File, PreopenDirectory } from "@bjorn3/browser_wasi_shim";
 import { untar } from "./tar.js";
 import { runWasiCommand } from "./wasi-run.js";
 import { bootOnce, fetchWithProgress, moduleLoader } from "./toolchain-assets.js";
+
+/**
+ * @typedef {Record<string, string>} SourceFiles
+ * @typedef {Record<string, any>} WorkerMessage
+ * @typedef {{
+ *   compileAndRun: (files: SourceFiles, primaryFile: string, log: (message: string) => void) => Promise<any>,
+ *   complete: (files: SourceFiles, primaryFile: string, offset: number, log: (message: string) => void, onProgress: (loaded: number, total: number) => void) => Promise<any>
+ * }} SwiftCompiler
+ */
 
 const TOOLCHAIN_BASE = "/toolchain";
 
@@ -28,6 +37,7 @@ const TOOLCHAIN_BASE = "/toolchain";
 //   complete -> "progress" { message } | "download-progress" { loaded, total } * ,
 //               then "completion-result" { ok, items, diagnostics?, error? }
 
+/** @param {WorkerMessage} msg */
 const post = (msg) => self.postMessage(msg);
 
 // ---------- Toolchain artifacts: fetched + compiled once, then shared ----------
@@ -41,7 +51,7 @@ const getLinkerModule = moduleLoader(`${TOOLCHAIN_BASE}/wasm-ld.wasm`);
 // rather than as part of the Run preload.
 const getIdeTestModule = moduleLoader(`${TOOLCHAIN_BASE}/swift-ide-test.wasm`);
 
-const getSysroot = bootOnce(async (onProgress) => {
+const getSysroot = bootOnce(async (/** @type {(loaded: number, total: number) => void} */ onProgress) => {
   const res = await fetchWithProgress(`${TOOLCHAIN_BASE}/swift-sysroot-core.tar`, onProgress);
   const buf = await res.arrayBuffer();
   return untar(buf);
@@ -78,10 +88,13 @@ function commonFrontendArgs() {
  * before instantiation finished would otherwise start a second download and
  * compile of ~350MB of WebAssembly.
  */
+/** @type {Promise<SwiftCompiler>|null} */
 let booting = null;
+/** @param {(loaded: number, total: number) => void} onProgress */
 const boot = (onProgress) => (booting ??= instantiate(onProgress));
 
 /** The instance `booting` resolved to, while it's still fit to be asked. */
+/** @type {SwiftCompiler|null} */
 let live = null;
 
 /**
@@ -100,6 +113,7 @@ let live = null;
  * Does nothing if `compiler` is not the current instance, so two requests
  * failing together discard one instance rather than two.
  */
+/** @param {SwiftCompiler} compiler */
 function discard(compiler) {
   if (live !== compiler) return;
   live = null;
@@ -111,6 +125,7 @@ function discard(compiler) {
  *
  * Call through `boot`, never directly.
  */
+/** @param {(loaded: number, total: number) => void} onProgress */
 async function instantiate(onProgress) {
   const [frontendModule, linkerModule, sysroot] = await Promise.all([
     getFrontendModule(onProgress),
@@ -207,6 +222,15 @@ function layoutInputs(files, primaryFile) {
  * @param {Record<string,string>} files every workspace file, keyed by tab name
  * @param {string} primaryFile the active tab; see `layoutInputs`
  */
+/**
+ * @param {WebAssembly.Module} frontendModule
+ * @param {WebAssembly.Module} linkerModule
+ * @param {() => any} sysrootPreopen
+ * @param {() => any} moduleCachePreopen
+ * @param {SourceFiles} files
+ * @param {string} primaryFile
+ * @param {(message: string) => void} log
+ */
 async function compileAndRun(frontendModule, linkerModule, sysrootPreopen, moduleCachePreopen, files, primaryFile, log) {
   const layout = layoutInputs(files, primaryFile);
   if ("error" in layout) {
@@ -222,6 +246,7 @@ async function compileAndRun(frontendModule, linkerModule, sysrootPreopen, modul
 
   // 1. swift-frontend: compile every file, together, to one object file.
   log("compiling...");
+  /** @param {string[]} extraArgs */
   const frontendArgv = (extraArgs) => [
     "swift-frontend",
     "-frontend",
@@ -317,7 +342,7 @@ async function compileAndRun(frontendModule, linkerModule, sysrootPreopen, modul
 
   // 3. Run the freshly linked program itself.
   log("running...");
-  const programModule = await WebAssembly.compile(programFile.data);
+  const programModule = await WebAssembly.compile(/** @type {any} */ (programFile.data));
   const runResult = await runWasiCommand(programModule, ["program"], []);
 
   return {
@@ -337,6 +362,7 @@ const COMPLETION_TOKEN = "COMPLETE";
 // Maps a "Decl[InstanceMethod]", "Keyword[func]", "Pattern/Local", etc. kind
 // tag (see CodeCompletionResult::printPrefix in the Swift compiler) to a
 // coarse CodeMirror-style completion type, used for icons/filtering.
+/** @param {string} tag */
 function completionKindFor(tag) {
   if (tag.startsWith("Keyword")) return "keyword";
   if (tag.startsWith("Decl[Module]")) return "namespace";
@@ -352,6 +378,7 @@ function completionKindFor(tag) {
 // Turns a completion string like "foo([#(x): Int#])[#Void#]" into readable
 // text by dropping swift-ide-test's placeholder/result-type delimiters
 // ("[#" ... "#]"), giving "foo((x): Int)Void".
+/** @param {string} text */
 function stripCompletionMarkup(text) {
   return text.replace(/\[#/g, "").replace(/#\]/g, "");
 }
@@ -365,6 +392,7 @@ function stripCompletionMarkup(text) {
  * first "; name=" field, which is always emitted (and always last, since
  * comments/sourcetext aren't requested here).
  */
+/** @param {string[]} stdoutLines */
 function parseCompletionResults(stdoutLines) {
   const text = stdoutLines.join("\n");
   const beginIdx = text.indexOf("Begin completions");
@@ -402,6 +430,15 @@ function parseCompletionResults(stdoutLines) {
  *
  * @param {Record<string,string>} files every workspace file, keyed by tab name
  * @param {string} primaryFile the file `offset` is measured into; see `layoutInputs`
+ */
+/**
+ * @param {WebAssembly.Module} ideTestModule
+ * @param {() => any} sysrootPreopen
+ * @param {() => any} moduleCachePreopen
+ * @param {SourceFiles} files
+ * @param {string} primaryFile
+ * @param {number} offset
+ * @param {(message: string) => void} log
  */
 async function completeAt(ideTestModule, sysrootPreopen, moduleCachePreopen, files, primaryFile, offset, log) {
   const layout = layoutInputs(files, primaryFile);
@@ -444,56 +481,69 @@ async function completeAt(ideTestModule, sysrootPreopen, moduleCachePreopen, fil
 
 // ---------- Request dispatch ----------
 
+/** @type {Record<string, (msg: WorkerMessage) => Promise<void>>} */
 const handlers = {
   async preload(msg) {
+    /** @param {number} loaded @param {number} total */
     const onProgress = (loaded, total) => post({ id: msg.id, type: "preload-progress", loaded, total });
     try {
       await boot(onProgress);
       post({ id: msg.id, type: "preload-done", ok: true });
     } catch (err) {
-      post({ id: msg.id, type: "preload-done", ok: false, error: String((err && err.message) || err) });
+      /** @type {any} */
+      const error = err;
+      post({ id: msg.id, type: "preload-done", ok: false, error: String((error && error.message) || error) });
     }
   },
 
   async complete(msg) {
     const { files, primaryFile, offset } = msg;
+    /** @param {string} message */
     const log = (message) => post({ id: msg.id, type: "progress", message });
+    /** @param {number} loaded @param {number} total */
     const onProgress = (loaded, total) => post({ id: msg.id, type: "download-progress", loaded, total });
     try {
       const compiler = await boot(onProgress);
       const { items, diagnostics } = await compiler.complete(files, primaryFile, offset, log, onProgress);
       post({ id: msg.id, type: "completion-result", ok: true, items, diagnostics });
     } catch (err) {
+      /** @type {any} */
+      const error = err;
       post({
         id: msg.id,
         type: "completion-result",
         ok: false,
         items: [],
-        error: String((err && err.stack) || err),
+        error: String((error && error.stack) || error),
       });
     }
   },
 
   async compile(msg) {
     const { files, primaryFile } = msg;
+    /** @param {string} message */
     const log = (message) => post({ id: msg.id, type: "progress", message });
+    /** @param {number} loaded @param {number} total */
     const onProgress = (loaded, total) => post({ id: msg.id, type: "download-progress", loaded, total });
     try {
       const compiler = await boot(onProgress);
       const result = await compiler.compileAndRun(files, primaryFile, log);
       post({ id: msg.id, type: "result", ...result });
     } catch (err) {
+      /** @type {any} */
+      const error = err;
       post({
         id: msg.id,
         type: "result",
         ok: false,
         stage: "internal",
-        diagnostics: [String((err && err.stack) || err)],
+        diagnostics: [String((error && error.stack) || error)],
       });
     }
   },
 };
 
+/** @param {MessageEvent<WorkerMessage>} event */
 self.onmessage = (event) => {
   const handler = handlers[event.data.type];
   if (handler) void handler(event.data);

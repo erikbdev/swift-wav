@@ -5,19 +5,27 @@
 // ('x'/'g') are skipped rather than parsed — the sysroot tarball is built by
 // GNU tar, which uses 'L' for long names, not PAX.
 
-import { Directory, File } from "https://esm.sh/@bjorn3/browser_wasi_shim@0.4.2";
+import { Directory, File } from "@bjorn3/browser_wasi_shim";
 
+/**
+ * @param {DataView} view
+ * @param {number} offset
+ * @param {number} length
+ * @returns {string}
+ */
 function readCString(view, offset, length) {
   const bytes = new Uint8Array(view.buffer, view.byteOffset + offset, length);
   const nul = bytes.indexOf(0);
   return new TextDecoder().decode(nul === -1 ? bytes : bytes.subarray(0, nul));
 }
 
+/** @param {DataView} view @param {number} offset @param {number} length */
 function readOctal(view, offset, length) {
   const str = readCString(view, offset, length).trim();
   return str.length ? parseInt(str, 8) : 0;
 }
 
+/** @param {any} root @param {string[]} parts @returns {any} */
 function mkdirp(root, parts) {
   let dir = root;
   for (const part of parts) {
@@ -38,18 +46,20 @@ function mkdirp(root, parts) {
 // GNU tar entries in the sysroot archive are written as "./a/b/c" — drop the
 // leading "." component along with empty ones, or every path ends up nested
 // under a spurious "." directory.
+/** @param {string} path @returns {string[]} */
 function pathParts(path) {
   return path.split("/").filter((p) => p !== "" && p !== ".");
 }
 
+/** @param {any} root @param {string} path @param {ArrayBuffer} data */
 function putFile(root, path, data) {
   const parts = pathParts(path);
-  const name = parts.pop();
+  const name = parts.pop() ?? "";
   const dir = mkdirp(root, parts);
   dir.contents.set(name, new File(data));
 }
 
-/** Parses a tar ArrayBuffer into a Directory tree rooted at "/". */
+/** @param {ArrayBuffer} buffer @returns {any} Parses a tar archive into a tree. */
 export function untar(buffer) {
   const root = new Directory(new Map());
   let offset = 0;

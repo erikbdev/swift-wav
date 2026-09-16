@@ -2,14 +2,18 @@
 // or the user's own linked program) to completion, capturing its stdout and
 // stderr as line arrays instead of letting them hit the console.
 
-import { WASI, ConsoleStdout, File, OpenFile } from "https://esm.sh/@bjorn3/browser_wasi_shim@0.4.2";
+import { WASI, ConsoleStdout, File, OpenFile } from "@bjorn3/browser_wasi_shim";
 
 /**
- * Instantiates and runs `module` as a WASI command with the given argv and
- * preopens, returning its exit code plus captured stdout/stderr lines.
+ * @param {WebAssembly.Module} module
+ * @param {string[]} argv
+ * @param {any[]} preopens
+ * @returns {Promise<{exitCode: number, stdout: string[], stderr: string[]}>}
  */
 export async function runWasiCommand(module, argv, preopens) {
+  /** @type {string[]} */
   const stdout = [];
+  /** @type {string[]} */
   const stderr = [];
   const fds = [
     new OpenFile(new File([])),
@@ -19,20 +23,23 @@ export async function runWasiCommand(module, argv, preopens) {
   ];
   const wasi = new WASI(argv, [], fds, { debug: false });
 
-  const instance = await WebAssembly.instantiate(module, {
+  /** @type {WebAssembly.Instance} */
+  const instance = /** @type {WebAssembly.Instance} */ (await WebAssembly.instantiate(module, {
     wasi_snapshot_preview1: wasi.wasiImport,
-  });
+  }));
 
   let exitCode = 0;
   try {
-    exitCode = wasi.start(instance);
+    exitCode = wasi.start(/** @type {any} */ (instance));
   } catch (err) {
+    /** @type {any} */
+    const error = err;
     // WASIProcExit is how `exit()`/`_start` returning is surfaced by some
     // builds; anything else is a genuine trap.
-    if (err && typeof err.code === "number") {
-      exitCode = err.code;
+    if (error && typeof error.code === "number") {
+      exitCode = error.code;
     } else {
-      stderr.push(`[trap] ${err && err.message ? err.message : err}`);
+      stderr.push(`[trap] ${error && error.message ? error.message : error}`);
       exitCode = 1;
     }
   }

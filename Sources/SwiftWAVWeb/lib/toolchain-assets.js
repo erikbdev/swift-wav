@@ -7,6 +7,7 @@
 /** @type {Map<string, {loaded: number, total: number}>} */
 const downloadProgress = new Map();
 
+/** @param {(loaded: number, total: number) => void} onProgress */
 function reportDownloadProgress(onProgress) {
   if (!onProgress) return;
   let loaded = 0;
@@ -28,6 +29,12 @@ function reportDownloadProgress(onProgress) {
  * response's Content-Length isn't a valid decoded total, and progress for it
  * is reported as indeterminate (0 total) rather than lied about.
  */
+/**
+ * @param {string} url
+ * @param {(loaded: number, total: number) => void} onProgress
+ * @param {string} [contentType]
+ * @returns {Promise<Response>}
+ */
 export async function fetchWithProgress(url, onProgress, contentType) {
   downloadProgress.set(url, { loaded: 0, total: 0 });
   const res = await fetch(url);
@@ -45,7 +52,8 @@ export async function fetchWithProgress(url, onProgress, contentType) {
         controller.close();
         return;
       }
-      downloadProgress.get(url).loaded += value.byteLength;
+      const progress = downloadProgress.get(url);
+      if (progress) progress.loaded += value.byteLength;
       reportDownloadProgress(onProgress);
       controller.enqueue(value);
     },
@@ -63,7 +71,12 @@ export async function fetchWithProgress(url, onProgress, contentType) {
  * failure forever; a resolved memo ignores whatever `onProgress` a later
  * caller passes, since there is nothing left to report progress on.
  */
+/**
+ * @param {(onProgress: any) => Promise<any>} load
+ * @returns {(onProgress: any) => Promise<any>}
+ */
 export function bootOnce(load) {
+  /** @type {Promise<any>|null} */
   let promise = null;
   return (onProgress) => {
     if (!promise) {
@@ -76,7 +89,7 @@ export function bootOnce(load) {
   };
 }
 
-/** A `bootOnce`-memoized fetch + `WebAssembly.compileStreaming` of `url`. */
+/** @param {string} url */
 export function moduleLoader(url) {
   return bootOnce(async (onProgress) => {
     const res = await fetchWithProgress(url, onProgress, "application/wasm");

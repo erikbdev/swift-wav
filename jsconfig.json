@@ -1,0 +1,19 @@
+{
+	"compilerOptions": {
+		"allowJs": true,
+		"checkJs": true,
+		"esModuleInterop": true,
+		"forceConsistentCasingInFileNames": true,
+		"resolveJsonModule": true,
+		"skipLibCheck": true,
+		"sourceMap": true,
+		"strict": true,
+		"moduleResolution": "bundler"
+	},
+	"include": [
+		"Sources/SwiftWAVWeb/**/*.js",
+		"Sources/SwiftWAVWeb/**/*.vue",
+		"Sources/SwiftWAVWeb/**/*.d.ts",
+		"vite.config.js"
+	]
+}
