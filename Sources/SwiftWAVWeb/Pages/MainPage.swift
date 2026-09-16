@@ -47,8 +47,6 @@ struct MainPage: HTMLDocument {
           --topbar-h: 54px;
           --status-h: 30px;
           --tabbar-h: 40px;
-          --activity-w: 44px;
-          --sidebar-w: 250px;
           --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3), 0 1px 1px rgba(0, 0, 0, .18);
           --shadow-card: 0 6px 22px -8px rgba(0, 0, 0, .45), 0 2px 8px -3px rgba(0, 0, 0, .28);
         }
@@ -127,68 +125,40 @@ struct MainPage: HTMLDocument {
           display: flex;
           min-height: 0;
         }
-        .activity {
-          width: var(--activity-w);
-          flex-shrink: 0;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 4px;
-          padding: 10px 0;
-          background: var(--bg-1);
-          border-right: 1px solid var(--border);
-        }
-        .activity-icon {
-          width: 28px;
-          height: 28px;
-          display: grid;
-          place-items: center;
-          border-radius: var(--r-sm);
-          color: var(--text-2);
-          font-size: 13px;
-          cursor: pointer;
-        }
-        .activity-icon:hover {
-          background: var(--bg-3);
-          color: var(--text-1);
-        }
-        .activity-icon.active {
-          background: var(--accent-dim);
-          color: var(--accent-hi);
-          box-shadow: inset 0 0 0 1px var(--accent-line);
-        }
         .editor-container {
           flex: 1.6;
           display: flex;
           flex-direction: column;
           min-width: 0;
           background: var(--bg-1);
+          position: relative;
         }
         .preview {
-          flex: 1;
+          flex: 1.15;
           display: flex;
           flex-direction: column;
           min-width: 0;
+          min-height: 0;
           background: var(--bg-2);
           border-left: 1px solid var(--border);
         }
         .panel-summary {
-          padding: 10px 14px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          min-height: 40px;
+          padding: 0 14px;
           border-bottom: 1px solid var(--border-faint);
           font-size: 11px;
           font-weight: 600;
           letter-spacing: 0.04em;
           color: var(--text-2);
         }
-        .panel-content {
-          flex: 1;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          text-align: center;
-          padding: 1rem;
-          color: var(--text-2);
-          font-size: 12.5px;
+        .panel-meta {
+          color: var(--text-3);
+          font-family: var(--mono);
+          font-size: 10px;
+          letter-spacing: 0;
         }
         .statusbar {
           display: flex;
@@ -204,138 +174,20 @@ struct MainPage: HTMLDocument {
         }
         .status-spacer { flex: 1; }
 
-        /* ---------- Sidebar (file tree) ---------- */
-
-        .sidebar {
-          width: var(--sidebar-w);
-          flex-shrink: 0;
-          display: flex;
-          flex-direction: column;
-          background: var(--bg-2);
-          border-right: 1px solid var(--border);
-          overflow: hidden;
-        }
-        .sidebar-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 10px 12px 6px;
-          color: var(--text-2);
-          font-weight: 600;
-          font-size: 10.5px;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-        }
-        .sidebar-header button {
-          display: grid;
-          place-items: center;
-          width: 20px;
-          height: 20px;
-          border-radius: var(--r-sm);
-          border: 1px solid var(--border);
-          background: var(--bg-3);
-          color: var(--text-1);
-          font-family: inherit;
-          font-size: 0.85rem;
-          line-height: 1;
-          cursor: pointer;
-          transition: background 0.12s ease, color 0.12s ease;
-        }
-        .sidebar-header button:hover {
-          background: var(--accent-dim);
-          color: var(--accent-hi);
-          border-color: var(--accent-line);
-        }
-        .file-list {
-          flex: 1;
-          overflow-y: auto;
-          padding: 0 6px;
-        }
-        .file-item {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          height: 28px;
-          padding: 0 8px;
-          border-radius: var(--r-sm);
-          color: var(--text-1);
-          font-size: 12.5px;
-          cursor: pointer;
-          white-space: nowrap;
-          user-select: none;
-        }
-        .file-item:hover {
-          background: var(--bg-3);
-        }
-        .file-item.active {
-          background: var(--accent-dim);
-          color: var(--text-0);
-          box-shadow: inset 0 0 0 1px var(--accent-line);
-        }
-        .file-item .dot {
-          width: 6px;
-          height: 6px;
-          border-radius: 50%;
-          background: var(--accent);
-          opacity: 0.55;
-          flex-shrink: 0;
-        }
-        .file-item.active .dot {
-          opacity: 1;
-        }
-        .file-item .name {
-          flex: 1;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          font-family: var(--mono);
-        }
-        .file-item .remove {
-          opacity: 0;
-          color: var(--text-3);
-          font-size: 0.85rem;
-          padding: 0 3px;
-          border-radius: var(--r-sm);
-        }
-        .file-item:hover .remove {
-          opacity: 1;
-        }
-        .file-item .remove:hover {
-          color: #fff;
-          background: var(--red);
-        }
-        .new-file-row {
-          display: flex;
-          align-items: center;
-          padding: 2px 8px;
-          gap: 6px;
-        }
-        .new-file-row input {
-          flex: 1;
-          min-width: 0;
-          background: var(--bg-1);
-          border: 1px solid var(--border);
-          border-radius: var(--r-sm);
-          color: var(--text-0);
-          font: 12.5px var(--mono);
-          padding: 4px 7px;
-        }
-        .new-file-row input:focus {
-          outline: none;
-          border-color: var(--accent-line);
-          box-shadow: 0 0 0 3px var(--accent-dim);
-        }
-
         /* ---------- Tab bar + editor ---------- */
 
         .tabbar {
           display: flex;
           align-items: center;
           height: var(--tabbar-h);
-          padding: 0 8px;
-          gap: 4px;
+          min-width: 0;
+          padding: 0 10px;
+          gap: 3px;
+          background: var(--bg-1);
           border-bottom: 1px solid var(--border-faint);
           flex-shrink: 0;
           overflow-x: auto;
+          scrollbar-width: thin;
         }
         .tab {
           position: relative;
@@ -347,13 +199,26 @@ struct MainPage: HTMLDocument {
           max-width: 200px;
           border: 1px solid transparent;
           border-radius: var(--r-sm);
+          background: transparent;
           color: var(--text-2);
           font-size: 12.5px;
           font-family: var(--mono);
+          appearance: none;
           cursor: pointer;
+          flex: 0 0 auto;
           white-space: nowrap;
+          text-align: left;
           user-select: none;
           transition: background 0.12s ease, color 0.12s ease;
+        }
+        .tab::before {
+          content: "";
+          width: 6px;
+          height: 6px;
+          flex: 0 0 auto;
+          border-radius: 50%;
+          background: var(--accent);
+          opacity: 0.45;
         }
         .tab:hover {
           background: var(--bg-3);
@@ -364,20 +229,36 @@ struct MainPage: HTMLDocument {
           color: var(--text-0);
           box-shadow: inset 0 -2px 0 var(--accent);
         }
-        .tab .close {
-          color: var(--text-3);
-          border-radius: 50%;
-          width: 16px;
-          height: 16px;
-          display: inline-flex;
-          align-items: center;
+        .tab.active::before { opacity: 1; }
+        .tab-add {
+          width: 28px;
+          flex-basis: 28px;
           justify-content: center;
+          padding: 0;
+          color: var(--text-2);
+          font-family: var(--sans);
+          font-size: 18px;
           line-height: 1;
-          flex-shrink: 0;
         }
-        .tab .close:hover {
-          color: #fff;
-          background: var(--red);
+        .tab-add::before { display: none; }
+        .tab-add:hover { color: var(--accent-hi); }
+        .new-tab {
+          display: flex;
+          align-items: center;
+          height: 28px;
+          flex: 0 0 160px;
+        }
+        .new-tab input {
+          width: 100%;
+          height: 26px;
+          padding: 0 8px;
+          border: 1px solid var(--accent-line);
+          border-radius: var(--r-sm);
+          outline: none;
+          background: var(--bg-2);
+          color: var(--text-0);
+          font: 12px var(--mono);
+          box-shadow: 0 0 0 3px var(--accent-dim);
         }
         .cm-host {
           flex: 1;
@@ -401,26 +282,349 @@ struct MainPage: HTMLDocument {
           font-family: var(--mono);
         }
 
-        .panel-content.output {
-          display: block;
-          align-items: initial;
-          justify-content: initial;
-          text-align: left;
-          overflow-y: auto;
-          white-space: pre-wrap;
-          word-break: break-word;
+        /* ---------- Problems ---------- */
+
+        .problems-bar {
+          display: flex;
+          align-items: center;
+          min-height: 30px;
+          padding: 0 8px;
+          gap: 10px;
+          background: var(--bg-2);
+          border-top: 1px solid var(--border);
+          color: var(--text-2);
           font-family: var(--mono);
-          font-size: 11.5px;
-          line-height: 1.5;
+          font-size: 10.5px;
+          flex-shrink: 0;
         }
-        .panel-content .out-line { color: var(--text-0); }
-        .panel-content .out-line.stderr { color: var(--red); }
-        .panel-content .out-line.diagnostic { color: var(--amber); }
-        .panel-content .out-line.status { color: var(--text-2); font-style: italic; }
+        .problems-toggle {
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          height: 24px;
+          padding: 0 8px;
+          border: 1px solid transparent;
+          border-radius: var(--r-sm);
+          background: transparent;
+          color: var(--text-1);
+          font: inherit;
+          cursor: pointer;
+        }
+        .problems-toggle:hover,
+        .problems-toggle[aria-expanded="true"] {
+          background: var(--bg-3);
+          border-color: var(--border);
+          color: var(--text-0);
+        }
+        .problems-icon {
+          display: inline-grid;
+          place-items: center;
+          width: 15px;
+          height: 15px;
+          border-radius: 50%;
+          background: var(--text-3);
+          color: var(--bg-0);
+          font-size: 10px;
+          font-weight: 700;
+        }
+        .problems-toggle.has-errors .problems-icon { background: var(--red); color: #fff; }
+        .problems-toggle.has-warnings .problems-icon { background: var(--amber); color: var(--bg-0); }
+        .problems-count {
+          min-width: 16px;
+          padding: 1px 5px;
+          border-radius: 10px;
+          background: var(--bg-4);
+          color: var(--text-1);
+          text-align: center;
+        }
+        .problems-status { color: var(--text-3); }
+        .output-toggle {
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          height: 24px;
+          padding: 0 8px;
+          border: 1px solid transparent;
+          border-radius: var(--r-sm);
+          background: transparent;
+          color: var(--text-1);
+          font: inherit;
+          cursor: pointer;
+        }
+        .output-toggle:hover,
+        .output-toggle[aria-expanded="true"] {
+          background: var(--bg-3);
+          border-color: var(--border);
+          color: var(--text-0);
+        }
+        .output-icon {
+          display: inline-grid;
+          place-items: center;
+          width: 15px;
+          height: 15px;
+          border-radius: 50%;
+          background: var(--text-3);
+          color: var(--bg-0);
+          font-size: 10px;
+          font-weight: 700;
+        }
+        .output-toggle.has-output .output-icon { background: var(--blue); color: #fff; }
+        .output-count {
+          min-width: 16px;
+          padding: 1px 5px;
+          border-radius: 10px;
+          background: var(--bg-4);
+          color: var(--text-1);
+          text-align: center;
+        }
+        .problems-panel {
+          position: absolute;
+          right: 8px;
+          bottom: 38px;
+          left: 8px;
+          z-index: 10;
+          display: flex;
+          flex-direction: column;
+          max-height: min(320px, 45vh);
+          overflow-y: auto;
+          border: 1px solid var(--border-strong);
+          border-radius: var(--r-md);
+          background: rgba(27, 26, 24, .98);
+          box-shadow: var(--shadow-card);
+        }
+        .problems-panel.is-hidden { display: none; }
+        .problem-item {
+          display: grid;
+          grid-template-columns: 9px minmax(100px, 175px) 1fr;
+          align-items: center;
+          gap: 9px;
+          min-height: 38px;
+          padding: 7px 11px;
+          width: 100%;
+          border: 0;
+          border-bottom: 1px solid var(--border-faint);
+          background: transparent;
+          color: var(--text-1);
+          cursor: pointer;
+          font: inherit;
+          text-align: left;
+        }
+        .problem-item:last-child { border-bottom: 0; }
+        .problem-item:hover { background: var(--bg-3); }
+        .problem-severity {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: var(--amber);
+        }
+        .problem-item.error .problem-severity { background: var(--red); }
+        .problem-location {
+          overflow: hidden;
+          color: var(--text-3);
+          font: 10px var(--mono);
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .problem-message {
+          overflow: hidden;
+          color: var(--text-0);
+          font-size: 11.5px;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .problems-empty {
+          padding: 14px;
+          color: var(--text-3);
+          font: 11px var(--mono);
+        }
+        .output-panel {
+          position: absolute;
+          right: 8px;
+          bottom: 38px;
+          left: 8px;
+          z-index: 10;
+          display: flex;
+          flex-direction: column;
+          max-height: min(320px, 45vh);
+          overflow-y: auto;
+          border: 1px solid var(--border-strong);
+          border-radius: var(--r-md);
+          background: rgba(27, 26, 24, .98);
+          box-shadow: var(--shadow-card);
+        }
+        .output-panel.is-hidden { display: none; }
+        .output-line {
+          padding: 7px 11px;
+          border-bottom: 1px solid var(--border-faint);
+          color: var(--text-0);
+          font: 11.5px/1.45 var(--mono);
+          white-space: pre-wrap;
+          overflow-wrap: anywhere;
+        }
+        .output-line:last-child { border-bottom: 0; }
+        .output-line.stderr { color: var(--red); }
+        .output-line.status { color: var(--text-2); font-style: italic; }
+        .output-empty {
+          padding: 14px;
+          color: var(--text-3);
+          font: 11px var(--mono);
+        }
+
+        /* ---------- Arrangement preview ---------- */
+
+        .timeline-toolbar {
+          display: flex;
+          align-items: center;
+          min-height: 36px;
+          padding: 0 12px;
+          gap: 9px;
+          border-bottom: 1px solid var(--border-faint);
+          color: var(--text-2);
+          font: 10px var(--mono);
+        }
+        .transport-button {
+          display: grid;
+          place-items: center;
+          width: 23px;
+          height: 23px;
+          border: 1px solid var(--border);
+          border-radius: 50%;
+          background: var(--bg-3);
+          color: var(--text-1);
+          cursor: pointer;
+        }
+        .transport-button:hover { color: var(--accent-hi); border-color: var(--accent-line); }
+        .timeline-spacer { flex: 1; }
+        .timeline-mode {
+          padding: 3px 6px;
+          border: 1px solid var(--border);
+          border-radius: 4px;
+          color: var(--text-3);
+          font-size: 9px;
+          letter-spacing: .06em;
+        }
+        .timeline {
+          flex: 1;
+          min-height: 0;
+          overflow: auto;
+          padding-bottom: 18px;
+          background: var(--bg-2);
+        }
+        .timeline-ruler,
+        .timeline-row {
+          display: grid;
+          grid-template-columns: 116px minmax(520px, 1fr);
+        }
+        .timeline-ruler {
+          position: sticky;
+          top: 0;
+          z-index: 2;
+          min-height: 28px;
+          border-bottom: 1px solid var(--border);
+          background: rgba(27, 26, 24, .96);
+        }
+        .timeline-track-label {
+          display: flex;
+          align-items: center;
+          padding-left: 12px;
+          color: var(--text-3);
+          font: 9px var(--mono);
+          letter-spacing: .08em;
+        }
+        .ruler-bars {
+          display: grid;
+          grid-template-columns: repeat(8, minmax(65px, 1fr));
+          align-items: center;
+        }
+        .ruler-bars span {
+          height: 100%;
+          padding: 8px 7px 0;
+          border-left: 1px solid var(--border-faint);
+          color: var(--text-3);
+          font: 9px var(--mono);
+        }
+        .timeline-row {
+          min-height: 76px;
+          border-bottom: 1px solid var(--border-faint);
+        }
+        .track-label {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 0 10px 0 12px;
+          border-right: 1px solid var(--border-faint);
+          background: rgba(22, 21, 20, .42);
+        }
+        .track-color {
+          width: 4px;
+          height: 32px;
+          border-radius: 4px;
+          background: var(--accent);
+        }
+        .track-color.blue { background: var(--blue); }
+        .track-color.purple { background: var(--purple); }
+        .track-name { color: var(--text-0); font-size: 11px; }
+        .track-type {
+          display: block;
+          margin-top: 3px;
+          color: var(--text-3);
+          font: 9px var(--mono);
+          letter-spacing: .05em;
+        }
+        .track-lane {
+          position: relative;
+          min-width: 520px;
+          background-image: repeating-linear-gradient(
+            to right,
+            transparent 0,
+            transparent calc(12.5% - 1px),
+            var(--border-faint) calc(12.5% - 1px),
+            var(--border-faint) 12.5%
+          );
+        }
+        .track-lane::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          background: repeating-linear-gradient(
+            to right,
+            transparent 0,
+            transparent calc(3.125% - 1px),
+            rgba(255, 244, 230, .025) calc(3.125% - 1px),
+            rgba(255, 244, 230, .025) 3.125%
+          );
+        }
+        .clip {
+          position: absolute;
+          top: 16px;
+          z-index: 1;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          height: 44px;
+          min-width: 92px;
+          padding: 0 9px;
+          border-left: 3px solid var(--accent-hi);
+          border-radius: 4px;
+          background: rgba(255, 107, 69, .22);
+          color: var(--text-0);
+          font-size: 10.5px;
+        }
+        .clip small { color: rgba(255, 244, 230, .58); font: 9px var(--mono); }
+        .clip.blue { border-color: var(--blue); background: rgba(74, 163, 232, .19); }
+        .clip.purple { border-color: var(--purple); background: rgba(168, 132, 240, .18); }
+        .timeline-note {
+          padding: 16px 12px;
+          color: var(--text-3);
+          font: 10px var(--mono);
+          text-align: center;
+        }
 
         @media (max-width: 800px) {
           .body { flex-direction: column; }
-          .sidebar { width: 100%; }
+          .editor-container { flex: 1 1 58%; min-height: 360px; }
+          .preview { flex: 1 1 42%; min-height: 300px; border-top: 1px solid var(--border); border-left: 0; }
         }
         """
       )
@@ -438,21 +642,99 @@ struct MainPage: HTMLDocument {
         }
       }
       div(.class("body")) {
-        // TODO: work this out later.
-        //
-        // nav(.class("activity")) {
-        //   div(.class("activity-icon active"), .title("Files")) { "📄" }
-        //   div(.class("activity-icon"), .title("Search")) { "🔍" }
-        //   div(.class("activity-icon"), .title("Settings")) { "⚙" }
-        // }
-        // aside(.id("file-sidebar"), .class("sidebar")) {}
         div(.class("editor-container")) {
           div(.id("tab-bar"), .class("tabbar")) {}
           div(.id("cm-host"), .class("cm-host")) {}
+          div(.class("problems-bar")) {
+            button(.id("problems-toggle"), .class("problems-toggle"), .type(.button)) {
+              span(.class("problems-icon")) { "0" }
+              span { "Problems" }
+              span(.class("problems-count")) { "0" }
+            }
+            button(.id("output-toggle"), .class("output-toggle"), .type(.button)) {
+              span(.class("output-icon")) { "›" }
+              span { "Output" }
+              span(.class("output-count")) { "0" }
+            }
+            span(.id("problems-status"), .class("problems-status")) { "No issues" }
+          }
+          div(.id("problems-panel"), .class("problems-panel is-hidden")) {}
+          div(.id("output-panel"), .class("output-panel is-hidden")) {}
         }
         aside(.id("preview-pane"), .class("preview")) {
-          div(.class("panel-summary")) { "RESULTS" }
-          div(.id("preview-content"), .class("panel-content")) { "Run your code to hear it play." }
+          div(.class("panel-summary")) {
+            span { "TIMELINE" }
+            span(.class("panel-meta")) { "4/4 · 120 BPM" }
+          }
+          div(.class("timeline-toolbar")) {
+            button(.class("transport-button"), .type(.button), .title("Preview placeholder")) { "▶" }
+            span { "1.1.1" }
+            span { "·" }
+            span { "8 bars" }
+            div(.class("timeline-spacer")) {}
+            span(.class("timeline-mode")) { "ARRANGEMENT" }
+          }
+          div(.id("timeline-content"), .class("timeline")) {
+            div(.class("timeline-ruler")) {
+              div(.class("timeline-track-label")) { "TRACKS" }
+              div(.class("ruler-bars")) {
+                span { "1" }
+                span { "2" }
+                span { "3" }
+                span { "4" }
+                span { "5" }
+                span { "6" }
+                span { "7" }
+                span { "8" }
+              }
+            }
+            div(.class("timeline-row")) {
+              div(.class("track-label")) {
+                span(.class("track-color")) {}
+                div {
+                  div(.class("track-name")) { "Drums" }
+                  span(.class("track-type")) { "MIDI" }
+                }
+              }
+              div(.class("track-lane")) {
+                div(.class("clip"), .style("left: 1%; width: 35%;")) {
+                  span { "Beat pattern" }
+                  small { "8 bars" }
+                }
+              }
+            }
+            div(.class("timeline-row")) {
+              div(.class("track-label")) {
+                span(.class("track-color blue")) {}
+                div {
+                  div(.class("track-name")) { "Bass" }
+                  span(.class("track-type")) { "MIDI" }
+                }
+              }
+              div(.class("track-lane")) {
+                div(.class("clip blue"), .style("left: 25%; width: 49%;")) {
+                  span { "Low groove" }
+                  small { "bars 3–6" }
+                }
+              }
+            }
+            div(.class("timeline-row")) {
+              div(.class("track-label")) {
+                span(.class("track-color purple")) {}
+                div {
+                  div(.class("track-name")) { "Harmony" }
+                  span(.class("track-type")) { "MIDI" }
+                }
+              }
+              div(.class("track-lane")) {
+                div(.class("clip purple"), .style("left: 50%; width: 37%;")) {
+                  span { "Chord sketch" }
+                  small { "bars 5–7" }
+                }
+              }
+            }
+            div(.class("timeline-note")) { "Timeline clips will be populated after Swift parsing." }
+          }
         }
       }
       div(.class("statusbar")) {
@@ -465,13 +747,27 @@ struct MainPage: HTMLDocument {
       HTMLRaw(
         /* js */
         """
-        import { EditorState, Compartment } from "https://esm.sh/@codemirror/state@6.4.1";
-        import { EditorView, keymap } from "https://esm.sh/@codemirror/view@6.34.1";
-        import { basicSetup } from "https://esm.sh/codemirror@6.0.1";
-        import { indentWithTab } from "https://esm.sh/@codemirror/commands@6.7.1";
-        import { StreamLanguage, HighlightStyle, syntaxHighlighting } from "https://esm.sh/@codemirror/language@6.10.3";
-        import { swift } from "https://esm.sh/@codemirror/legacy-modes@6.5.1/mode/swift";
-        import { tags as t } from "https://esm.sh/@lezer/highlight@1.2.1";
+        import { EditorState } from "https://esm.sh/@codemirror/state@6.7.0";
+        // Every CodeMirror package must resolve to the same state/view module
+        // URLs. In particular, the Swift package imports view with state as a
+        // dependency, so use that same dependency path here as well.
+        import {
+          EditorView,
+          keymap,
+          lineNumbers,
+          highlightActiveLine,
+          highlightActiveLineGutter,
+          drawSelection,
+          dropCursor,
+          highlightSpecialChars,
+        } from "https://esm.sh/@codemirror/view@6.43.11?deps=@codemirror/state@6.7.0";
+        import { defaultKeymap, history, historyKeymap } from "https://esm.sh/@codemirror/commands@6.10.3?deps=@codemirror/language@6.12.4,@codemirror/state@6.7.0,@codemirror/view@6.43.11,@lezer/highlight@1.2.3";
+        import { HighlightStyle, syntaxHighlighting } from "https://esm.sh/@codemirror/language@6.12.4?deps=@codemirror/state@6.7.0,@codemirror/view@6.43.11,@lezer/highlight@1.2.3";
+        // Keep the language package on the same CodeMirror module instances as
+        // the editor. Without this, esm.sh may resolve its broad peer ranges to
+        // newer copies, and CodeMirror rejects extensions from the other copy.
+        import { swift } from "https://esm.sh/@fazelstudio/codemirror-lang-swift@0.2.1?deps=@codemirror/language@6.12.4,@codemirror/state@6.7.0,@codemirror/view@6.43.11,@lezer/highlight@1.2.3";
+        import { tags as t } from "https://esm.sh/@lezer/highlight@1.2.3";
 
         const STORAGE_KEY = "swift-wav:workspace";
 
@@ -498,7 +794,19 @@ struct MainPage: HTMLDocument {
             if (raw) {
               const parsed = JSON.parse(raw);
               if (parsed && parsed.files && Object.keys(parsed.files).length > 0) {
-                return parsed;
+                // Only strings are valid CodeMirror documents. Older saved
+                // workspaces can contain stale/non-string values, which would
+                // otherwise produce an invalid Text tree on the first click.
+                const files = Object.fromEntries(
+                  Object.entries(parsed.files).filter(([, content]) => typeof content === "string")
+                );
+                const names = Object.keys(files);
+                if (names.length > 0) {
+                  return {
+                    files,
+                    active: names.includes(parsed.active) ? parsed.active : names[0],
+                  };
+                }
               }
             }
           } catch {
@@ -506,7 +814,6 @@ struct MainPage: HTMLDocument {
           }
           return {
             files: { [DEFAULT_FILE]: DEFAULT_CONTENT },
-            open: [DEFAULT_FILE],
             active: DEFAULT_FILE,
           };
         }
@@ -548,8 +855,9 @@ struct MainPage: HTMLDocument {
               height: "100%",
               fontSize: "12.5px",
             },
-            ".cm-content": { caretColor: "#ff6b45", fontFamily: "var(--mono)", padding: "12px 0" },
-            ".cm-cursor, .cm-dropCursor": { borderLeftColor: "#ff6b45" },
+            ".cm-content": { caretColor: "#ff855f", fontFamily: "var(--mono)", padding: "12px 0" },
+            ".cm-cursor": { borderLeft: "2px solid #ff855f" },
+            ".cm-dropCursor": { borderLeft: "2px solid #ff855f" },
             "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
               backgroundColor: "rgba(255, 107, 69, 0.22)",
             },
@@ -565,222 +873,184 @@ struct MainPage: HTMLDocument {
           { dark: true }
         );
 
-        const languageCompartment = new Compartment();
-
-        function extensionsFor() {
-          return [
-            basicSetup,
-            keymap.of([indentWithTab]),
-            languageCompartment.of(StreamLanguage.define(swift)),
-            syntaxHighlighting(studioHighlight),
-            studioTheme,
-            EditorView.updateListener.of((update) => {
-              if (update.docChanged) onDocChanged(update.state.doc.toString());
-            }),
-          ];
-        }
-
         // ---------- App wiring ----------
 
         let workspace = loadWorkspace();
         let view = null;
 
-        const sidebarEl = document.getElementById("file-sidebar");
         const tabBarEl = document.getElementById("tab-bar");
         const hostEl = document.getElementById("cm-host");
+        const problemsToggleEl = document.getElementById("problems-toggle");
+        const problemsPanelEl = document.getElementById("problems-panel");
+        const problemsStatusEl = document.getElementById("problems-status");
+        const outputToggleEl = document.getElementById("output-toggle");
+        const outputPanelEl = document.getElementById("output-panel");
 
-        function onDocChanged(content) {
-          if (!workspace.active) return;
-          workspace.files[workspace.active] = content;
-          saveWorkspace(workspace);
-        }
-
-        function stateFor(filename) {
+        function editorState(filename) {
           return EditorState.create({
             doc: workspace.files[filename] ?? "",
-            extensions: extensionsFor(),
+            extensions: [
+              // Keep the setup extensions on the same view instance as the
+              // editor. The aggregate `basicSetup` package can pull a second
+              // copy of CodeMirror through esm.sh's peer dependency resolver.
+              history(),
+              lineNumbers(),
+              highlightSpecialChars(),
+              drawSelection(),
+              dropCursor(),
+              highlightActiveLine(),
+              highlightActiveLineGutter(),
+              keymap.of([
+                ...defaultKeymap,
+                ...historyKeymap,
+                {
+                  key: "Tab",
+                  run: (target) => {
+                    target.dispatch(target.state.replaceSelection("  "));
+                    return true;
+                  },
+                },
+              ]),
+              swift(),
+              syntaxHighlighting(studioHighlight),
+              studioTheme,
+              EditorView.updateListener.of(({ docChanged, state }) => {
+                if (docChanged) {
+                  workspace.files[filename] = state.doc.toString();
+                  saveWorkspace(workspace);
+                  // Diagnostics belong to the last compiled snapshot. Clear
+                  // them as soon as that snapshot is edited, like an IDE's
+                  // Problems view while the next validation is pending.
+                  setProblems([], { close: true });
+                }
+              }),
+            ],
           });
         }
 
-        function mountEditor() {
-          if (!hostEl) return;
-          view = new EditorView({
-            state: workspace.active ? stateFor(workspace.active) : undefined,
-            parent: hostEl,
-          });
+        function destroyEditor() {
+          if (!view) return;
+
+          // Clear the browser's native selection before destroying the view.
+          // Safari can deliver a queued selectionchange after the DOM view has
+          // been removed; that stale event is what reaches CodeMirror's
+          // lineInner/findPos code with an invalid text leaf.
+          const currentView = view;
+          currentView.contentDOM.blur();
+          const selection = window.getSelection?.();
+          if (selection?.anchorNode && hostEl?.contains(selection.anchorNode)) {
+            selection.removeAllRanges();
+          }
+          currentView.destroy();
+          view = null;
+        }
+
+        function showEditor(filename) {
+          if (!hostEl || !filename) return;
+          destroyEditor();
+          hostEl.replaceChildren();
+          const state = editorState(filename);
+          view = new EditorView({ state, parent: hostEl });
+        }
+
+        function syncEditorDocument() {
+          if (!view || !workspace.active) return;
+          try {
+            workspace.files[workspace.active] = view.state.doc.toString();
+            saveWorkspace(workspace);
+          } catch {
+            // Keep Run usable even if the browser reports a transient selection
+            // or view-tree error while the document is being measured.
+          }
         }
 
         function switchTo(filename) {
           if (!(filename in workspace.files)) return;
-          if (!workspace.open.includes(filename)) workspace.open.push(filename);
+          syncEditorDocument();
           workspace.active = filename;
           saveWorkspace(workspace);
-          if (view) view.setState(stateFor(filename));
-          render();
-        }
-
-        function closeTab(filename, event) {
-          event.stopPropagation();
-          workspace.open = workspace.open.filter((f) => f !== filename);
-          if (workspace.active === filename) {
-            workspace.active = workspace.open[workspace.open.length - 1] ?? null;
-          }
-          saveWorkspace(workspace);
-          if (view) {
-            if (workspace.active) view.setState(stateFor(workspace.active));
-            else view.setState(EditorState.create({ doc: "", extensions: extensionsFor() }));
-          }
-          render();
-        }
-
-        function deleteFile(filename, event) {
-          event.stopPropagation();
-          if (!confirm(`Delete ${filename}?`)) return;
-          delete workspace.files[filename];
-          workspace.open = workspace.open.filter((f) => f !== filename);
-          if (workspace.active === filename) {
-            workspace.active = workspace.open[workspace.open.length - 1] ?? null;
-          }
-          saveWorkspace(workspace);
-          if (view) {
-            view.setState(
-              workspace.active ? stateFor(workspace.active) : EditorState.create({ doc: "", extensions: extensionsFor() })
-            );
-          }
-          render();
+          showEditor(filename);
+          renderTabBar();
         }
 
         function createFile(filename) {
-          const name = filename.trim();
+          let name = filename.trim();
+          if (name && !name.toLowerCase().endsWith(".swift")) name += ".swift";
           if (!name || name in workspace.files) return;
+          syncEditorDocument();
           workspace.files[name] = "";
-          workspace.open.push(name);
           workspace.active = name;
           saveWorkspace(workspace);
-          if (view) view.setState(stateFor(name));
-          render();
-        }
-
-        function renderSidebar() {
-          if (!sidebarEl) return;
-          sidebarEl.innerHTML = "";
-
-          const header = document.createElement("div");
-          header.className = "sidebar-header";
-          header.innerHTML = `<span>Files</span>`;
-          const addBtn = document.createElement("button");
-          addBtn.textContent = "+";
-          addBtn.title = "New file";
-          addBtn.addEventListener("click", () => showNewFileInput());
-          header.appendChild(addBtn);
-          sidebarEl.appendChild(header);
-
-          const list = document.createElement("div");
-          list.className = "file-list";
-
-          for (const name of Object.keys(workspace.files).sort()) {
-            const item = document.createElement("div");
-            item.className = "file-item" + (name === workspace.active ? " active" : "");
-            item.addEventListener("click", () => switchTo(name));
-
-            const dot = document.createElement("span");
-            dot.className = "dot";
-            item.appendChild(dot);
-
-            const label = document.createElement("span");
-            label.className = "name";
-            label.textContent = name;
-            item.appendChild(label);
-
-            const remove = document.createElement("span");
-            remove.className = "remove";
-            remove.textContent = "×";
-            remove.addEventListener("click", (e) => deleteFile(name, e));
-            item.appendChild(remove);
-
-            list.appendChild(item);
-          }
-
-          sidebarEl.appendChild(list);
+          showEditor(name);
+          renderTabBar();
         }
 
         function showNewFileInput() {
+          if (!tabBarEl || tabBarEl.querySelector(".new-tab")) return;
           const row = document.createElement("div");
-          row.className = "new-file-row";
+          row.className = "new-tab";
           const input = document.createElement("input");
           input.type = "text";
           input.placeholder = "NewFile.swift";
           row.appendChild(input);
-          sidebarEl.appendChild(row);
+          const addButton = tabBarEl.querySelector(".tab-add");
+          tabBarEl.insertBefore(row, addButton);
           input.focus();
 
           input.addEventListener("keydown", (e) => {
             if (e.key === "Enter") {
               createFile(input.value);
             } else if (e.key === "Escape") {
-              render();
+              renderTabBar();
             }
           });
-          input.addEventListener("blur", () => render());
+          input.addEventListener("blur", () => renderTabBar());
         }
 
         function renderTabBar() {
           if (!tabBarEl) return;
           tabBarEl.innerHTML = "";
 
-          for (const name of workspace.open) {
-            const tab = document.createElement("div");
+          for (const name of Object.keys(workspace.files)) {
+            const tab = document.createElement("button");
+            tab.type = "button";
             tab.className = "tab" + (name === workspace.active ? " active" : "");
+            tab.setAttribute("aria-selected", name === workspace.active ? "true" : "false");
             tab.addEventListener("click", () => switchTo(name));
 
             const label = document.createElement("span");
             label.textContent = name;
             tab.appendChild(label);
 
-            const close = document.createElement("span");
-            close.className = "close";
-            close.textContent = "×";
-            close.addEventListener("click", (e) => closeTab(name, e));
-            tab.appendChild(close);
-
             tabBarEl.appendChild(tab);
           }
+
+          const add = document.createElement("button");
+          add.type = "button";
+          add.className = "tab tab-add";
+          add.textContent = "+";
+          add.title = "New Swift file";
+          add.addEventListener("click", showNewFileInput);
+          tabBarEl.appendChild(add);
         }
 
-        function render() {
-          renderSidebar();
-          renderTabBar();
-          if (hostEl) {
-            const empty = hostEl.querySelector(".empty-state");
-            if (!workspace.active) {
-              if (!empty) {
-                hostEl.innerHTML = `<div class="empty-state">No file open</div>`;
-              }
-            } else if (empty) {
-              hostEl.innerHTML = "";
-              mountEditor();
-            }
-          }
-        }
-
-        if (!workspace.active) {
-          render();
-        } else {
-          mountEditor();
-          render();
-        }
+        showEditor(workspace.active);
+        renderTabBar();
 
         // ---------- In-browser Swift compilation ----------
 
         const runBtn = document.querySelector(".tb-btn.run");
         const runLabelEl = document.getElementById("run-label");
         const statusEl = document.getElementById("status-text");
-        const outputEl = document.getElementById("preview-content");
 
         let worker = null;
         let nextRequestId = 0;
         let running = false;
         let toolchainReady = false;
+        let problems = [];
+        let problemsOpen = false;
+        let outputLines = [];
+        let outputOpen = false;
 
         function getWorker() {
           if (!worker) {
@@ -797,20 +1067,211 @@ struct MainPage: HTMLDocument {
           if (runLabelEl) runLabelEl.textContent = text;
         }
 
-        function formatMB(bytes) {
-          return (bytes / (1024 * 1024)).toFixed(1);
+        function problemFromLine(line) {
+          const text = String(line).trim();
+          if (!text) return null;
+
+          const match = text.match(/^(.*?):(\\d+):(\\d+):\\s*(error|warning):\\s*(.*)$/i);
+          if (match) {
+            return {
+              severity: match[4].toLowerCase(),
+              file: match[1],
+              line: Number(match[2]),
+              column: Number(match[3]),
+              message: match[5],
+            };
+          }
+
+          const bareMatch = text.match(/^(error|warning):\\s*(.*)$/i);
+          if (bareMatch) {
+            return {
+              severity: bareMatch[1].toLowerCase(),
+              file: "Swift",
+              line: null,
+              column: null,
+              message: bareMatch[2],
+            };
+          }
+
+          if (text.startsWith("[trap]")) {
+            return { severity: "error", file: "runtime", line: null, column: null, message: text.slice(6).trim() };
+          }
+
+          return null;
         }
 
-        function renderOutput(lines) {
-          if (!outputEl) return;
-          outputEl.classList.add("output");
-          outputEl.innerHTML = "";
-          for (const { text, kind } of lines) {
-            const div = document.createElement("div");
-            div.className = "out-line" + (kind ? ` ${kind}` : "");
-            div.textContent = text;
-            outputEl.appendChild(div);
+        function problemsFromResult(data) {
+          const lines = [...(data.diagnostics ?? []), ...(data.stderr ?? [])]
+            .flatMap((line) => String(line).split("\\n"));
+          const seen = new Set();
+          const parsed = [];
+          for (const line of lines) {
+            const problem = problemFromLine(line);
+            if (!problem) continue;
+            const key = `${problem.severity}:${problem.file}:${problem.line}:${problem.column}:${problem.message}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              parsed.push(problem);
+            }
           }
+          if (!parsed.length && !data.ok) {
+            parsed.push({
+              severity: "error",
+              file: "Swift",
+              line: null,
+              column: null,
+              message: `Compilation failed at ${data.stage ?? "an unknown stage"}.`,
+            });
+          }
+          return parsed;
+        }
+
+        function jumpToProblem(problem) {
+          if (!view || !problem.line) return;
+          const filename = Object.keys(workspace.files).find((name) => problem.file?.endsWith(name));
+          if (filename && filename !== workspace.active) switchTo(filename);
+          if (!view) return;
+
+          const lineNumber = Math.min(Math.max(problem.line, 1), view.state.doc.lines);
+          const line = view.state.doc.line(lineNumber);
+          const position = Math.min(line.from + Math.max((problem.column ?? 1) - 1, 0), line.to);
+          view.dispatch({ selection: { anchor: position }, scrollIntoView: true });
+          view.focus();
+        }
+
+        function renderProblems() {
+          if (!problemsToggleEl || !problemsPanelEl) return;
+          const errorCount = problems.filter((problem) => problem.severity === "error").length;
+          const warningCount = problems.filter((problem) => problem.severity === "warning").length;
+          problemsToggleEl.className = "problems-toggle";
+          if (errorCount) problemsToggleEl.classList.add("has-errors");
+          else if (warningCount) problemsToggleEl.classList.add("has-warnings");
+          problemsToggleEl.setAttribute("aria-expanded", problemsOpen ? "true" : "false");
+          problemsToggleEl.innerHTML = `
+            <span class="problems-icon">${errorCount ? "!" : warningCount ? "!" : "✓"}</span>
+            <span>Problems</span>
+            <span class="problems-count">${problems.length}</span>
+          `;
+          if (problemsStatusEl) {
+            problemsStatusEl.textContent = problems.length
+              ? `${errorCount} error${errorCount === 1 ? "" : "s"}, ${warningCount} warning${warningCount === 1 ? "" : "s"}`
+              : "No issues";
+          }
+
+          problemsPanelEl.classList.toggle("is-hidden", !problemsOpen);
+          problemsPanelEl.innerHTML = "";
+          if (!problems.length) {
+            const empty = document.createElement("div");
+            empty.className = "problems-empty";
+            empty.textContent = "No Swift problems detected.";
+            problemsPanelEl.appendChild(empty);
+            return;
+          }
+
+          for (const problem of problems) {
+            const item = document.createElement("button");
+            item.type = "button";
+            item.className = `problem-item ${problem.severity}`;
+            item.addEventListener("click", () => jumpToProblem(problem));
+
+            const severity = document.createElement("span");
+            severity.className = "problem-severity";
+            item.appendChild(severity);
+
+            const location = document.createElement("span");
+            location.className = "problem-location";
+            location.textContent = problem.line ? `${problem.file}:${problem.line}:${problem.column}` : problem.file;
+            item.appendChild(location);
+
+            const message = document.createElement("span");
+            message.className = "problem-message";
+            message.textContent = problem.message;
+            item.appendChild(message);
+
+            problemsPanelEl.appendChild(item);
+          }
+        }
+
+        function outputFromResult(data) {
+          const lines = [];
+          const appendLines = (values, kind) => {
+            for (const value of values ?? []) {
+              for (const text of String(value).split("\\n")) lines.push({ text, kind });
+            }
+          };
+
+          appendLines(data.stdout, "stdout");
+          appendLines(data.stderr, "stderr");
+          if (!lines.length) {
+            lines.push({
+              text: data.ok ? "Program produced no output." : `Run failed at ${data.stage ?? "an unknown stage"}.`,
+              kind: "status",
+            });
+          }
+          return lines;
+        }
+
+        function renderOutput() {
+          if (!outputToggleEl || !outputPanelEl) return;
+          outputToggleEl.className = "output-toggle";
+          if (outputLines.length) outputToggleEl.classList.add("has-output");
+          outputToggleEl.setAttribute("aria-expanded", outputOpen ? "true" : "false");
+          outputToggleEl.innerHTML = `
+            <span class="output-icon">${outputLines.length ? "•" : "›"}</span>
+            <span>Output</span>
+            <span class="output-count">${outputLines.length}</span>
+          `;
+
+          outputPanelEl.classList.toggle("is-hidden", !outputOpen);
+          outputPanelEl.innerHTML = "";
+          if (!outputLines.length) {
+            const empty = document.createElement("div");
+            empty.className = "output-empty";
+            empty.textContent = "Run the active Swift file to see its output.";
+            outputPanelEl.appendChild(empty);
+            return;
+          }
+
+          for (const line of outputLines) {
+            const item = document.createElement("div");
+            item.className = `output-line ${line.kind ?? "stdout"}`;
+            item.textContent = line.text;
+            outputPanelEl.appendChild(item);
+          }
+        }
+
+        function setOutput(nextLines, options = {}) {
+          outputLines = Array.isArray(nextLines) ? nextLines : [];
+          if (options.reveal && outputLines.length) outputOpen = true;
+          if (options.close) outputOpen = false;
+          renderOutput();
+        }
+
+        function setProblems(nextProblems, options = {}) {
+          problems = Array.isArray(nextProblems) ? nextProblems : [];
+          if (options.reveal && problems.length) problemsOpen = true;
+          if (options.close) problemsOpen = false;
+          renderProblems();
+        }
+
+        problemsToggleEl?.addEventListener("click", () => {
+          problemsOpen = !problemsOpen;
+          if (problemsOpen) outputOpen = false;
+          renderProblems();
+          renderOutput();
+        });
+        renderProblems();
+        renderOutput();
+
+        outputToggleEl?.addEventListener("click", () => {
+          outputOpen = !outputOpen;
+          if (outputOpen) problemsOpen = false;
+          renderProblems();
+          renderOutput();
+        });
+
+        function formatMB(bytes) {
+          return (bytes / (1024 * 1024)).toFixed(1);
         }
 
         // Kick off the precompressed toolchain download as soon as the page
@@ -847,7 +1308,15 @@ struct MainPage: HTMLDocument {
               } else {
                 setRunLabel("Run (retry download)");
                 setStatus("Toolchain download failed");
-                renderOutput([{ text: `Failed to download Swift toolchain: ${data.error}`, kind: "stderr" }]);
+                setProblems([
+                  {
+                    severity: "error",
+                    file: "Toolchain",
+                    line: null,
+                    column: null,
+                    message: `Failed to download Swift toolchain: ${data.error}`,
+                  },
+                ], { reveal: true });
                 if (runBtn) runBtn.disabled = false;
               }
             }
@@ -860,14 +1329,21 @@ struct MainPage: HTMLDocument {
         function runCurrentFile() {
           if (running) return;
           if (!workspace.active) {
-            renderOutput([{ text: "No file open.", kind: "stderr" }]);
+            setProblems(
+              [{ severity: "error", file: "Swift", line: null, column: null, message: "No Swift file is active." }],
+              { reveal: true }
+            );
             return;
           }
 
+          // Read from the live CodeMirror document at the point of execution,
+          // rather than relying solely on the asynchronous update listener.
+          syncEditorDocument();
           running = true;
+          setProblems([], { close: true });
+          setOutput([], { close: true });
           if (runBtn) runBtn.disabled = true;
           setStatus("Compiling…");
-          renderOutput([{ text: "Compiling…", kind: "status" }]);
 
           const id = ++nextRequestId;
           const w = getWorker();
@@ -878,7 +1354,6 @@ struct MainPage: HTMLDocument {
 
             if (data.type === "progress") {
               setStatus(data.message);
-              renderOutput([{ text: data.message, kind: "status" }]);
               return;
             }
             if (data.type === "download-progress") {
@@ -896,19 +1371,15 @@ struct MainPage: HTMLDocument {
             setRunLabel("Run");
             if (runBtn) runBtn.disabled = false;
 
-            const lines = [];
-            for (const text of data.diagnostics ?? []) lines.push({ text, kind: "diagnostic" });
-            for (const text of data.stdout ?? []) lines.push({ text, kind: "stdout" });
-            for (const text of data.stderr ?? []) lines.push({ text, kind: "stderr" });
+            const nextProblems = problemsFromResult(data);
+            setProblems(nextProblems, nextProblems.length ? { reveal: true } : { close: true });
+            setOutput(outputFromResult(data));
 
             if (data.ok) {
               setStatus("Ready");
-              if (lines.length === 0) lines.push({ text: "Program produced no output.", kind: "status" });
             } else {
               setStatus(`Failed (${data.stage ?? "unknown"})`);
-              if (lines.length === 0) lines.push({ text: `Compilation failed at stage: ${data.stage}`, kind: "stderr" });
             }
-            renderOutput(lines);
           };
 
           w.addEventListener("message", onMessage);
