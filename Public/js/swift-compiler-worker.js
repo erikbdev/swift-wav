@@ -46,36 +46,31 @@ function reportDownloadProgress(onProgress) {
  * across all in-flight fetches, and returns a Response with `contentType` set
  * (needed for WebAssembly.compileStreaming).
  */
-function fetchToolchainWithProgress(url, onProgress, contentType) {
+async function fetchToolchainWithProgress(url, onProgress, contentType) {
   downloadProgress.set(url, { loaded: 0, total: 0 });
-  return fetch(url).then((res) => {
-    if (!res.ok) throw new Error(`fetching ${url} failed: ${res.status}`);
-    const total = res.headers.has("content-encoding")
-      ? 0
-      : Number(res.headers.get("content-length")) || 0;
-    downloadProgress.set(url, { loaded: 0, total });
-    reportDownloadProgress(onProgress);
-
-    if (!res.body) throw new Error(`fetching ${url} returned an empty body`);
-    const reader = res.body.getReader();
-    const trackedStream = new ReadableStream({
-      async pull(controller) {
-        const { done, value } = await reader.read();
-        if (done) {
-          controller.close();
-          return;
-        }
-        downloadProgress.get(url).loaded += value.byteLength;
-        reportDownloadProgress(onProgress);
-        controller.enqueue(value);
-      },
-      cancel(reason) {
-        return reader.cancel(reason);
-      },
-    });
-
-    return new Response(trackedStream, contentType ? { headers: { "Content-Type": contentType } } : undefined);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`fetching ${url} failed: ${res.status}`);
+  const total = res.headers.has("content-encoding") ? 0 : Number(res.headers.get("content-length")) || 0;
+  downloadProgress.set(url, { loaded: 0, total });
+  reportDownloadProgress(onProgress);
+  if (!res.body) throw new Error(`fetching ${url} returned an empty body`);
+  const reader = res.body.getReader();
+  const trackedStream = new ReadableStream({
+    async pull(controller) {
+      const { done, value: value_1 } = await reader.read();
+      if (done) {
+        controller.close();
+        return;
+      }
+      downloadProgress.get(url).loaded += value_1.byteLength;
+      reportDownloadProgress(onProgress);
+      controller.enqueue(value_1);
+    },
+    cancel(reason) {
+      return reader.cancel(reason);
+    },
   });
+  return new Response(trackedStream, contentType ? { headers: { "Content-Type": contentType } } : undefined);
 }
 
 function compileModuleOnce(getPromise, setPromise, url, onProgress) {
