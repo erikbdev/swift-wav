@@ -50,7 +50,9 @@ function cancelCreate() {
 
 function submitCreate() {
   const name = newFileName.value;
-  if (!name.trim()) return;
+  if (!name.trim()) {
+    cancelCreate();
+  };
   emit("create-file", name);
   cancelCreate();
 }
@@ -164,7 +166,7 @@ async function revealProblem(problem: Problem) {
         </span>
       </button>
 
-      <div v-if="isCreating" class="tab new-tab">
+      <div v-if="isCreating" class="new-tab">
         <input
           ref="newFileInput"
           v-model="newFileName"
@@ -173,12 +175,11 @@ async function revealProblem(problem: Problem) {
           autocomplete="off"
           @keydown.enter.prevent="submitCreate"
           @keydown.esc.prevent="cancelCreate"
-          @blur="cancelCreate"
+          @blur="submitCreate"
         />
       </div>
 
       <button
-        v-if="!isCreating"
         type="button"
         class="tab tab-add"
         title="New Swift file"
@@ -278,7 +279,6 @@ async function revealProblem(problem: Problem) {
   gap: 7px;
   height: 28px;
   padding: 0 11px;
-  max-width: 200px;
   border: 1px solid transparent;
   border-radius: var(--r-sm);
   background: transparent;
@@ -364,7 +364,7 @@ async function revealProblem(problem: Problem) {
 }
 .new-tab input {
   width: 100%;
-  height: 26px;
+  height: 28px;
   padding: 0 8px;
   border: 1px solid var(--accent-line);
   border-radius: var(--r-sm);
@@ -372,7 +372,6 @@ async function revealProblem(problem: Problem) {
   background: var(--bg-2);
   color: var(--text-0);
   font: 12px var(--mono);
-  box-shadow: 0 0 0 3px var(--accent-dim);
 }
 .cm-host {
   flex: 1;
