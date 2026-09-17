@@ -1,24 +1,22 @@
-<script setup vapor>
+<script setup lang="ts" vapor>
 import EditorWorkspace from "./components/EditorWorkspace.vue";
 import StatusBar from "./components/StatusBar.vue";
 import TimelinePanel from "./components/TimelinePanel.vue";
 import TopBar from "./components/TopBar.vue";
-import { useSwiftCompiler } from "./composables/useSwiftCompiler.js";
-import { useWorkspace } from "./composables/useWorkspace.js";
+import { useSwiftCompiler } from "./composables/useSwiftCompiler";
+import { useWorkspace } from "./composables/useWorkspace";
 
 const workspace = useWorkspace();
 const compiler = useSwiftCompiler();
 const { files, activeFile } = workspace;
 const { runLabel, runDisabled, problems, output, status } = compiler;
 
-/** @param {{name: string, content: string}} update */
-function handleFileUpdate({ name, content }) {
+function handleFileUpdate({ name, content }: { name: string; content: string }) {
   workspace.updateFile(name, content);
   compiler.clearProblems();
 }
 
-/** @param {number} position @returns {Promise<any[]>} */
-function requestCompletions(position) {
+function requestCompletions(position: number) {
   return compiler.complete(workspace.snapshot(), position);
 }
 

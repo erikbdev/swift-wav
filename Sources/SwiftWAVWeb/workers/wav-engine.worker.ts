@@ -9,13 +9,13 @@
  * protocol is defined. `ping` makes it easy to smoke-test worker startup.
  */
 
-/** @param {Record<string, any>} message */
-function post(message) {
+type WorkerMessage = Record<string, any>;
+
+function post(message: WorkerMessage): void {
 	self.postMessage(message);
 }
 
-/** @param {MessageEvent<Record<string, any>>} event */
-self.onmessage = (event) => {
+self.onmessage = (event: MessageEvent<WorkerMessage>) => {
 	const message = event.data ?? {};
 
 	if (message.type === "ping") {

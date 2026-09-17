@@ -7,7 +7,7 @@
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "vue-tsc --noEmit --project jsconfig.json",
+    "check": "vue-tsc --noEmit",
     "format": "oxfmt Sources/SwiftWAVWeb"
   },
   "dependencies": {

@@ -1,32 +1,30 @@
+export type WorkerMessage = { id: number; type: string; [key: string]: unknown };
+
 /**
  * Thin transport wrapper around the Swift compiler worker.
  */
 export function createSwiftCompilerClient() {
-	/** @type {Worker|null} */
-	let worker = null;
+	let worker: Worker | null = null;
 	let nextRequestId = 0;
 
-	/** @returns {Worker} */
-	function getWorker() {
-		worker ??= new Worker(new URL("../workers/swift-compiler.worker.js", import.meta.url), {
+	function getWorker(): Worker {
+		worker ??= new Worker(new URL("../workers/swift-compiler.worker.ts", import.meta.url), {
 			type: "module",
 		});
 		return worker;
 	}
 
-	/**
-	 * @param {string} type
-	 * @param {Record<string, any>} payload
-	 * @param {string} terminalType
-	 * @param {(message: Record<string, any>) => void} [onProgress]
-	 */
-	function request(type, payload, terminalType, onProgress) {
+	function request(
+		type: string,
+		payload: Record<string, unknown>,
+		terminalType: string,
+		onProgress?: (message: WorkerMessage) => void
+	): Promise<WorkerMessage> {
 		return new Promise((resolve, reject) => {
 			const id = ++nextRequestId;
 			const currentWorker = getWorker();
 
-			/** @param {MessageEvent<Record<string, any>>} event */
-			const onMessage = (event) => {
+			const onMessage = (event: MessageEvent<WorkerMessage>) => {
 				const message = event.data;
 				if (message.id !== id) return;
 
@@ -44,8 +42,7 @@ export function createSwiftCompilerClient() {
 				resolve(message);
 			};
 
-			/** @param {ErrorEvent} event */
-			const onError = (event) => {
+			const onError = (event: ErrorEvent) => {
 				cleanup();
 				reject(event.error instanceof Error ? event.error : new Error(event.message));
 			};
@@ -62,27 +59,20 @@ export function createSwiftCompilerClient() {
 	}
 
 	return {
-		/** @param {(message: Record<string, any>) => void} [onProgress] */
-		preload(onProgress) {
+		preload(onProgress?: (message: WorkerMessage) => void) {
 			return request("preload", {}, "preload-done", onProgress);
 		},
 
-		/**
-		 * @param {Record<string, string>} files
-		 * @param {string} primaryFile
-		 * @param {(message: Record<string, any>) => void} [onProgress]
-		 */
-		compile(files, primaryFile, onProgress) {
+		compile(files: Record<string, string>, primaryFile: string, onProgress?: (message: WorkerMessage) => void) {
 			return request("compile", { files, primaryFile }, "result", onProgress);
 		},
 
-		/**
-		 * @param {Record<string, string>} files
-		 * @param {string} primaryFile
-		 * @param {number} offset
-		 * @param {(message: Record<string, any>) => void} [onProgress]
-		 */
-		complete(files, primaryFile, offset, onProgress) {
+		complete(
+			files: Record<string, string>,
+			primaryFile: string,
+			offset: number,
+			onProgress?: (message: WorkerMessage) => void
+		) {
 			return request("complete", { files, primaryFile, offset }, "completion-result", onProgress);
 		},
 

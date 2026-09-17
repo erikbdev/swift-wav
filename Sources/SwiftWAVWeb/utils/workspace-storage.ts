@@ -6,6 +6,8 @@
  * is being used.
  */
 
+import type { Workspace } from "../types";
+
 export const STORAGE_KEY = "swift-wav:workspace";
 export const DEFAULT_FILE = "Song.swift";
 export const DEFAULT_CONTENT = `struct MySong: Song {
@@ -22,12 +24,7 @@ export const DEFAULT_CONTENT = `struct MySong: Song {
 }
 `;
 
-/**
- * @typedef {{files: Record<string, string>, active: string}} Workspace
- */
-
-/** @returns {Workspace} */
-export function loadWorkspace() {
+export function loadWorkspace(): Workspace {
 	try {
 		if (typeof localStorage === "undefined") return defaultWorkspace();
 
@@ -37,8 +34,10 @@ export function loadWorkspace() {
 			if (parsed && parsed.files && Object.keys(parsed.files).length > 0) {
 				// Only strings are valid CodeMirror documents. Older saved
 				// workspaces can contain stale/non-string values.
-				const files = Object.fromEntries(
-					Object.entries(parsed.files).filter(([, content]) => typeof content === "string")
+				const files: Record<string, string> = Object.fromEntries(
+					Object.entries(parsed.files as Record<string, unknown>).filter(
+						(entry): entry is [string, string] => typeof entry[1] === "string"
+					)
 				);
 				const names = Object.keys(files);
 				if (names.length > 0) {
@@ -56,16 +55,14 @@ export function loadWorkspace() {
 	return defaultWorkspace();
 }
 
-/** @returns {Workspace} */
-export function defaultWorkspace() {
+export function defaultWorkspace(): Workspace {
 	return {
 		files: { [DEFAULT_FILE]: DEFAULT_CONTENT },
 		active: DEFAULT_FILE,
 	};
 }
 
-/** @param {Workspace} workspace */
-export function saveWorkspace(workspace) {
+export function saveWorkspace(workspace: Workspace): void {
 	try {
 		if (typeof localStorage !== "undefined") {
 			localStorage.setItem(STORAGE_KEY, JSON.stringify(workspace));

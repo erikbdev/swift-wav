@@ -11,9 +11,10 @@ import {
 } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
-import { autocompletion } from "@codemirror/autocomplete";
+import { autocompletion, type CompletionContext, type CompletionResult } from "@codemirror/autocomplete";
 import { swift } from "@fazelstudio/codemirror-lang-swift";
 import { tags as t } from "@lezer/highlight";
+import type { CompletionItem } from "../types";
 
 // Warm near-black studio theme: bg-1 editor surface, orange-red accent,
 // JetBrains Mono, matching the rest of the app's chrome.
@@ -66,18 +67,14 @@ const studioTheme = EditorView.theme(
  * Completion is kept outside the component so the editor remains focused on
  * rendering and document changes while the compiler composable owns the
  * worker request.
- *
- * @param {(position: number) => Promise<any[]>} requestCompletions
  */
-function swiftCompletionSource(requestCompletions) {
-	/** @param {any} context */
-	return async (context) => {
+function swiftCompletionSource(requestCompletions: (position: number) => Promise<CompletionItem[]>) {
+	return async (context: CompletionContext): Promise<CompletionResult | null> => {
 		const word = context.matchBefore(/[A-Za-z_][A-Za-z0-9_]*/);
 		if (!word && !context.explicit) return null;
 		if (word && word.from === word.to && !context.explicit) return null;
 
-		/** @type {any[]} */
-		let items;
+		let items: CompletionItem[];
 		try {
 			items = await requestCompletions(context.pos);
 		} catch {
@@ -97,10 +94,13 @@ function swiftCompletionSource(requestCompletions) {
 	};
 }
 
-/**
- * @param {{document: string, onChange: (value: string) => void, requestCompletions: (position: number) => Promise<any[]>}} options
- */
-export function createSwiftEditorState(options) {
+interface CreateSwiftEditorStateOptions {
+	document: string;
+	onChange: (value: string) => void;
+	requestCompletions: (position: number) => Promise<CompletionItem[]>;
+}
+
+export function createSwiftEditorState(options: CreateSwiftEditorStateOptions): EditorState {
 	return EditorState.create({
 		doc: options.document,
 		extensions: [
@@ -133,8 +133,10 @@ export function createSwiftEditorState(options) {
 	});
 }
 
-/** @param {any} view @param {{line: (number|null), column: (number|null)}} problem */
-export function revealProblem(view, problem) {
+export function revealProblem(
+	view: EditorView | null,
+	problem: { line: number | null; column: number | null }
+): void {
 	if (!view || !problem.line) return;
 
 	const lineNumber = Math.min(Math.max(problem.line, 1), view.state.doc.lines);

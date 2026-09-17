@@ -1,11 +1,6 @@
-/**
- * @typedef {{severity: string, file: string, line: (number|null), column: (number|null), message: string}} Problem
- * @typedef {{text: string, kind: string}} OutputLine
- * @typedef {Record<string, any>} CompilerMessage
- */
+import type { CompilerResult, OutputLine, Problem } from "../types";
 
-/** @param {string} line @returns {Problem|null} */
-export function problemFromLine(line) {
+export function problemFromLine(line: string): Problem | null {
 	const text = String(line).trim();
 	if (!text) return null;
 
@@ -44,14 +39,12 @@ export function problemFromLine(line) {
 	return null;
 }
 
-/** @param {CompilerMessage} data @returns {Problem[]} */
-export function problemsFromResult(data) {
+export function problemsFromResult(data: CompilerResult): Problem[] {
 	const lines = [...(data.diagnostics ?? []), ...(data.stderr ?? [])].flatMap((line) =>
 		String(line).split("\n")
 	);
-	const seen = new Set();
-	/** @type {Problem[]} */
-	const parsed = [];
+	const seen = new Set<string>();
+	const parsed: Problem[] = [];
 
 	for (const line of lines) {
 		const problem = problemFromLine(line);
@@ -77,13 +70,10 @@ export function problemsFromResult(data) {
 	return parsed;
 }
 
-/** @param {CompilerMessage} data @returns {OutputLine[]} */
-export function outputFromResult(data) {
-	/** @type {OutputLine[]} */
-	const lines = [];
+export function outputFromResult(data: CompilerResult): OutputLine[] {
+	const lines: OutputLine[] = [];
 
-	/** @param {any[]|undefined} values @param {string} kind */
-	const appendLines = (values, kind) => {
+	const appendLines = (values: string[] | undefined, kind: string) => {
 		for (const value of values ?? []) {
 			for (const text of String(value).split("\n")) lines.push({ text, kind });
 		}
@@ -101,12 +91,10 @@ export function outputFromResult(data) {
 	return lines;
 }
 
-/** @param {Problem} problem @returns {string} */
-export function problemLocation(problem) {
+export function problemLocation(problem: Problem): string {
 	return problem.line ? `${problem.file}:${problem.line}:${problem.column}` : problem.file;
 }
 
-/** @param {number} bytes @returns {string} */
-export function formatMB(bytes) {
+export function formatMB(bytes: number): string {
 	return (bytes / (1024 * 1024)).toFixed(1);
 }

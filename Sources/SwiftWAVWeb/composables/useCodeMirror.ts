@@ -1,18 +1,23 @@
-import { onBeforeUnmount, onMounted } from "vue";
+import { onBeforeUnmount, onMounted, type Ref } from "vue";
 import { EditorView } from "@codemirror/view";
-import { createSwiftEditorState, revealProblem } from "../utils/swift-editor.js";
+import { createSwiftEditorState, revealProblem } from "../utils/swift-editor";
+import type { CompletionItem } from "../types";
+
+interface UseCodeMirrorOptions {
+	host: Ref<HTMLElement | null>;
+	getDocument: () => string;
+	onChange: (value: string) => void;
+	requestCompletions: (position: number) => Promise<CompletionItem[]>;
+}
 
 /**
  * Owns CodeMirror's imperative lifecycle inside a Vue component.
  *
  * The DOM node is created by the component template; this composable is the
  * only place that creates, replaces, focuses, or destroys an EditorView.
- *
- * @param {{host: {value: HTMLElement|null}, getDocument: () => string, onChange: (value: string) => void, requestCompletions: (position: number) => Promise<any[]>}} options
  */
-export function useCodeMirror(options) {
-	/** @type {any|null} */
-	let view = null;
+export function useCodeMirror(options: UseCodeMirrorOptions) {
+	let view: EditorView | null = null;
 
 	function destroy() {
 		if (!view) return;
@@ -41,8 +46,7 @@ export function useCodeMirror(options) {
 		view = new EditorView({ state, parent: options.host.value });
 	}
 
-	/** @param {string} document */
-	function setDocument(document) {
+	function setDocument(document: string) {
 		if (!view) return;
 		if (view.state.doc.toString() === document) return;
 
@@ -51,12 +55,11 @@ export function useCodeMirror(options) {
 		});
 	}
 
-	function getDocument() {
+	function getDocument(): string {
 		return view?.state.doc.toString() ?? "";
 	}
 
-	/** @param {{line: (number|null), column: (number|null)}} problem */
-	function reveal(problem) {
+	function reveal(problem: { line: number | null; column: number | null }) {
 		revealProblem(view, problem);
 	}
 

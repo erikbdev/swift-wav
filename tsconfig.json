@@ -1,19 +1,22 @@
 {
 	"compilerOptions": {
-		"allowJs": true,
-		"checkJs": true,
+		"target": "ES2022",
+		"module": "ESNext",
+		"lib": ["ES2022", "DOM", "DOM.Iterable"],
 		"esModuleInterop": true,
 		"forceConsistentCasingInFileNames": true,
 		"resolveJsonModule": true,
 		"skipLibCheck": true,
 		"sourceMap": true,
 		"strict": true,
-		"moduleResolution": "bundler"
+		"moduleResolution": "bundler",
+		"isolatedModules": true,
+		"noEmit": true
 	},
 	"include": [
-		"Sources/SwiftWAVWeb/**/*.js",
+		"Sources/SwiftWAVWeb/**/*.ts",
 		"Sources/SwiftWAVWeb/**/*.vue",
 		"Sources/SwiftWAVWeb/**/*.d.ts",
-		"vite.config.js"
+		"vite.config.ts"
 	]
 }
