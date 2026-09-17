@@ -39,6 +39,7 @@ function runCurrentFile() {
         @select-file="workspace.selectFile"
         @create-file="workspace.createFile"
         @update-file="handleFileUpdate"
+        @delete-file="workspace.deleteFile"
       />
       <TimelinePanel />
     </div>

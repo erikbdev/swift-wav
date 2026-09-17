@@ -29,13 +29,14 @@ export function useWorkspace() {
   const files = reactive<Record<string, string>>({ ...stored.files });
   const activeFile = ref(stored.active);
   const activeContent = computed(() => files[activeFile.value] ?? "");
+  console.log(`workspace: ${JSON.stringify(stored)}`);
 
   function persist() {
     try {
       if (typeof localStorage !== "undefined") {
         localStorage.setItem(
           STORAGE_KEY,
-          JSON.stringify({ files: { ...files, active: activeFile.value } }),
+          JSON.stringify({ files: { ...files }, active: activeFile.value }),
         );
       }
     } catch {
@@ -62,6 +63,16 @@ export function useWorkspace() {
   function updateFile(filename: string, content: string) {
     if (!(filename in files)) return;
     files[filename] = content;
+    persist();
+  }
+
+  function deleteFile(filename: string) {
+    if (!(filename in files)) return;
+    delete files[filename];
+    if (activeFile.value === filename) {
+      const remaining = Object.keys(files);
+      activeFile.value = remaining[0] ?? "";
+    }
     persist();
   }
 
@@ -117,6 +128,7 @@ export function useWorkspace() {
     selectFile,
     createFile,
     updateFile,
+    deleteFile,
     snapshot,
   };
 }
