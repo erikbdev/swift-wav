@@ -1,8 +1,5 @@
 /**
  * Thin transport wrapper around the Swift compiler worker.
- *
- * Keeping Worker construction and request correlation here makes the Vue
- * composable testable without leaking `postMessage` details into components.
  */
 export function createSwiftCompilerClient() {
 	/** @type {Worker|null} */
@@ -11,11 +8,9 @@ export function createSwiftCompilerClient() {
 
 	/** @returns {Worker} */
 	function getWorker() {
-		if (!worker) {
-			worker = new Worker(new URL("../workers/swift-compiler.worker.js", import.meta.url), {
-				type: "module",
-			});
-		}
+		worker ??= new Worker(new URL("../workers/swift-compiler.worker.js", import.meta.url), {
+			type: "module",
+		});
 		return worker;
 	}
 

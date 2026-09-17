@@ -14,6 +14,7 @@ let package = Package(
   ],
   targets: [
     .target(name: "SwiftWAVCore"),
+    .target(name: "SwiftWAVEngine"),
     .testTarget(
       name: "SwiftWAVCoreTests",
       dependencies: ["SwiftWAVCore"]
