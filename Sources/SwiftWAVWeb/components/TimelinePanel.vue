@@ -5,22 +5,6 @@
       <span class="panel-meta">4/4 · 120 BPM</span>
     </div>
 
-    <div class="timeline-toolbar">
-      <button
-        class="transport-button"
-        type="button"
-        title="Preview placeholder"
-        aria-label="Preview"
-      >
-        ▶
-      </button>
-      <span>1.1.1</span>
-      <span>·</span>
-      <span>8 bars</span>
-      <div class="timeline-spacer"></div>
-      <span class="timeline-mode">ARRANGEMENT</span>
-    </div>
-
     <div id="timeline-content" class="timeline">
       <div class="timeline-ruler">
         <div class="timeline-track-label">TRACKS</div>
@@ -36,6 +20,7 @@
         </div>
       </div>
 
+      <!-- TODO: dynamically calculate timeline-row -->
       <div class="timeline-row">
         <div class="track-label">
           <span class="track-color"></span>
@@ -52,39 +37,37 @@
         </div>
       </div>
 
-      <div class="timeline-row">
-        <div class="track-label">
-          <span class="track-color blue"></span>
-          <div>
-            <div class="track-name">Bass</div>
-            <span class="track-type">MIDI</span>
-          </div>
-        </div>
-        <div class="track-lane">
-          <div class="clip blue" style="left: 25%; width: 49%">
-            <span>Low groove</span>
-            <small>bars 3–6</small>
-          </div>
-        </div>
-      </div>
-
-      <div class="timeline-row">
-        <div class="track-label">
-          <span class="track-color purple"></span>
-          <div>
-            <div class="track-name">Harmony</div>
-            <span class="track-type">MIDI</span>
-          </div>
-        </div>
-        <div class="track-lane">
-          <div class="clip purple" style="left: 50%; width: 37%">
-            <span>Chord sketch</span>
-            <small>bars 5–7</small>
-          </div>
-        </div>
-      </div>
-
-      <div class="timeline-note">Timeline clips will be populated after Swift parsing.</div>
+      <!-- <div class="timeline-row"> -->
+      <!--   <div class="track-label"> -->
+      <!--     <span class="track-color blue"></span> -->
+      <!--     <div> -->
+      <!--       <div class="track-name">Bass</div> -->
+      <!--       <span class="track-type">MIDI</span> -->
+      <!--     </div> -->
+      <!--   </div> -->
+      <!--   <div class="track-lane"> -->
+      <!--     <div class="clip blue" style="left: 25%; width: 49%"> -->
+      <!--       <span>Low groove</span> -->
+      <!--       <small>bars 3–6</small> -->
+      <!--     </div> -->
+      <!--   </div> -->
+      <!-- </div> -->
+      <!---->
+      <!-- <div class="timeline-row"> -->
+      <!--   <div class="track-label"> -->
+      <!--     <span class="track-color purple"></span> -->
+      <!--     <div> -->
+      <!--       <div class="track-name">Harmony</div> -->
+      <!--       <span class="track-type">MIDI</span> -->
+      <!--     </div> -->
+      <!--   </div> -->
+      <!--   <div class="track-lane"> -->
+      <!--     <div class="clip purple" style="left: 50%; width: 37%"> -->
+      <!--       <span>Chord sketch</span> -->
+      <!--       <small>bars 5–7</small> -->
+      <!--     </div> -->
+      <!--   </div> -->
+      <!-- </div> -->
     </div>
   </aside>
 </template>
@@ -174,12 +157,17 @@
   background: rgba(27, 26, 24, 0.96);
 }
 .timeline-track-label {
+  position: sticky;
+  left: 0;
+  z-index: 1;
   display: flex;
   align-items: center;
   padding-left: 12px;
   color: var(--text-3);
   font: 9px var(--mono);
   letter-spacing: 0.08em;
+  background: var(--bg-2);
+  border-right: 1px solid var(--border-faint);
 }
 .ruler-bars {
   display: grid;
@@ -189,7 +177,7 @@
 .ruler-bars span {
   height: 100%;
   padding: 8px 7px 0;
-  border-left: 1px solid var(--border-faint);
+  border-right: 1px solid var(--border-faint);
   color: var(--text-3);
   font: 9px var(--mono);
 }
@@ -198,12 +186,15 @@
   border-bottom: 1px solid var(--border-faint);
 }
 .track-label {
+  position: sticky;
+  left: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 0 10px 0 12px;
   border-right: 1px solid var(--border-faint);
-  background: rgba(22, 21, 20, 0.42);
+  background: var(--bg-1);
 }
 .track-color {
   width: 4px;

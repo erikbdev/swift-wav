@@ -58,6 +58,7 @@ function runCurrentFile() {
 .body {
   display: flex;
   min-height: 0;
+  overflow: hidden;
 }
 
 @media (max-width: 800px) {
