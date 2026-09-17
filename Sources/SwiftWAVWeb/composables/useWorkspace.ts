@@ -28,7 +28,6 @@ export function useWorkspace() {
   const stored = loadWorkspace();
   const files = reactive<Record<string, string>>({ ...stored.files });
   const activeFile = ref(stored.active);
-
   const activeContent = computed(() => files[activeFile.value] ?? "");
 
   function persist() {
@@ -94,8 +93,11 @@ export function useWorkspace() {
           }
         }
       }
-    } catch {
+    } catch (e) {
       // Ignore corrupt storage and fall through to the default workspace.
+      console.error(
+        `An unknown error occurred when trying to load workspace. Loading default workspace: ${e}`,
+      );
     }
 
     return defaultWorkspace();
