@@ -13,7 +13,6 @@ const { runLabel, runDisabled, problems, output, status } = compiler;
 
 function handleFileUpdate({ name, content }: { name: string; content: string }) {
   workspace.updateFile(name, content);
-  compiler.clearProblems();
 }
 
 function requestCompletions(position: number) {
