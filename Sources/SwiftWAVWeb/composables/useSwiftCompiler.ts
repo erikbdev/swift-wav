@@ -26,9 +26,8 @@ export function useSwiftCompiler() {
     payload: Omit<Extract<WorkerRequest, { type: T }>, "id" | "type">,
     onProgress?: (message: WorkerResponse) => void,
   ): Promise<Extract<WorkerResponse, { type: ResultTypeFor<T> }>> {
+    const id = ++nextRequestId;
     return new Promise((resolve, reject) => {
-      const id = ++nextRequestId;
-
       const onMessage = (event: MessageEvent<WorkerResponse>) => {
         const message = event.data;
         if (message.id !== id) return;
@@ -78,8 +77,8 @@ export function useSwiftCompiler() {
 
   async function preload() {
     runDisabled.value = true;
-    setDownloadStatus("Downloading runtime…");
-    status.value = "Downloading Swift toolchain…";
+    setDownloadStatus("Downloading runtime...");
+    status.value = "Downloading Swift toolchain...";
 
     try {
       const result = await request("preload", {}, (message) => {

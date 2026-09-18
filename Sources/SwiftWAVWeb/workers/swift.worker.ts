@@ -157,46 +157,11 @@ async function fetchWithProgress(
   );
 }
 
-/**
- * Wraps an async `create` so that concurrent or repeated calls share one
- * in-flight (or settled) promise instead of redoing the work. A rejection
- * clears the memo, so the *next* call retries instead of replaying the same
- * failure forever; a resolved memo ignores whatever `onProgress` a later
- * caller passes, since there is nothing left to report progress on.
- *
- * `discard(value)` additionally evicts a *settled* result — for a resource
- * that can go bad after it resolved (a corrupted cache, a dead connection),
- * not just while it was loading. It's a no-op unless `value` is still the
- * live one, so concurrent callers discarding the same broken instance don't
- * evict two generations of it.
- */
-function memoize<T>(create: (onProgress?: ProgressCallback) => Promise<T>) {
-  let promise: Promise<T> | null = null;
-  let value: T | null = null;
-  const get = (onProgress?: ProgressCallback) => {
-    if (!promise) {
-      promise = create(onProgress)
-        .then((v) => (value = v))
-        .catch((err) => {
-          promise = null;
-          throw err;
-        });
-    }
-    return promise;
-  };
-  const discard = (v: T) => {
-    if (value !== v) return;
-    value = null;
-    promise = null;
-  };
-  return { get, discard };
-}
-
-function moduleLoader(url: string): (onProgress?: ProgressCallback) => Promise<WebAssembly.Module> {
-  return memoize(async (onProgress) => {
-    const res = await fetchWithProgress(url, onProgress, "application/wasm");
+function moduleLoader(url: string): () => Promise<WebAssembly.Module> {
+  return memoize(async () => {
+    const res = await fetchWithProgress(url, onProgress());
     return WebAssembly.compileStreaming(res);
-  }).get;
+  }).value;
 }
 
 // ---------- Toolchain artifacts: fetched + compiled once, then shared ----------
@@ -351,6 +316,7 @@ function parseCompletionResults(stdoutLines: string[]): CompletionItem[] {
 }
 
 // ---------- Boot: assemble the downloaded artifacts into a SwiftCompiler ----------
+// const compiler = /
 
 /**
  * One boot, whoever asks — this runs once, and every request shares its
