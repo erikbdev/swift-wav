@@ -11,21 +11,6 @@ export type OutputLine = {
   kind: string;
 };
 
-export type CompletionItem = {
-  label: string;
-  detail: string;
-  kind: string;
-};
-
-export type CompilerResult = {
-  ok: boolean;
-  stage?: string;
-  diagnostics?: string[];
-  stdout?: string[];
-  stderr?: string[];
-  exitCode?: number;
-};
-
 export type Workspace = {
   files: Record<string, string>;
   active: string;

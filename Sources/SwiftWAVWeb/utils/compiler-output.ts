@@ -1,4 +1,5 @@
-import type { CompilerResult, OutputLine, Problem } from "../types";
+import type { OutputLine, Problem } from "../types";
+import type { CompilerResult } from "../workers/swift.worker";
 
 export function problemFromLine(line: string): Problem | null {
 	const text = String(line).trim();

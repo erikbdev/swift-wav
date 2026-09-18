@@ -15,7 +15,7 @@ import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { autocompletion, type CompletionContext, type CompletionResult } from "@codemirror/autocomplete";
 import { swift } from "@fazelstudio/codemirror-lang-swift";
 import { tags as t } from "@lezer/highlight";
-import type { CompletionItem } from "../types";
+import type { CompletionItem } from "../workers/swift.worker";
 
 // Warm near-black studio theme: bg-1 editor surface, orange-red accent,
 // JetBrains Mono, matching the rest of the app's chrome.

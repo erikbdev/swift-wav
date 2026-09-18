@@ -2,20 +2,13 @@ import { onBeforeUnmount, onMounted, ref } from "vue";
 import { formatMB, outputFromResult, problemsFromResult } from "../utils/compiler-output";
 import SwiftWorker from "../workers/swift.worker.ts?worker";
 
-import type {
-  CompilerResult,
-  CompletionItem,
-  OutputLine,
-  Problem,
-  WorkspaceSnapshot,
-} from "../types";
+import type { OutputLine, Problem, WorkspaceSnapshot } from "../types";
+import type { ResultTypeFor, WorkerRequest, WorkerResponse } from "../workers/swift.worker";
 
 interface DownloadProgress {
   loaded: number;
   total: number;
 }
-
-type WorkerMessage = { id: number; type: string; [key: string]: unknown };
 
 export function useSwiftCompiler() {
   const worker = new SwiftWorker();
@@ -28,16 +21,15 @@ export function useSwiftCompiler() {
   const output = ref<OutputLine[]>([]);
   let nextRequestId = 0;
 
-  function request(
-    type: string,
-    payload: Record<string, unknown>,
-    terminalType: string,
-    onProgress?: (message: WorkerMessage) => void,
-  ): Promise<WorkerMessage> {
+  function request<T extends WorkerRequest["type"]>(
+    type: T,
+    payload: Omit<Extract<WorkerRequest, { type: T }>, "id" | "type">,
+    onProgress?: (message: WorkerResponse) => void,
+  ): Promise<Extract<WorkerResponse, { type: ResultTypeFor<T> }>> {
     return new Promise((resolve, reject) => {
       const id = ++nextRequestId;
 
-      const onMessage = (event: MessageEvent<WorkerMessage>) => {
+      const onMessage = (event: MessageEvent<WorkerResponse>) => {
         const message = event.data;
         if (message.id !== id) return;
 
@@ -50,9 +42,8 @@ export function useSwiftCompiler() {
           return;
         }
 
-        if (message.type !== terminalType) return;
         cleanup();
-        resolve(message);
+        resolve(message as Extract<WorkerResponse, { type: ResultTypeFor<T> }>);
       };
 
       const onError = (event: ErrorEvent) => {
@@ -67,7 +58,7 @@ export function useSwiftCompiler() {
 
       worker.addEventListener("message", onMessage);
       worker.addEventListener("error", onError);
-      worker.postMessage({ id, type, ...payload });
+      worker.postMessage({ id, type, ...payload } as WorkerRequest);
     });
   }
 
@@ -91,10 +82,10 @@ export function useSwiftCompiler() {
     status.value = "Downloading Swift toolchain…";
 
     try {
-      const result = await request("preload", {}, "preload-done", (message) =>
-        handleDownloadProgress(message as unknown as DownloadProgress),
-      );
-      if (!result.ok) throw new Error((result.error as string) || "toolchain download failed");
+      const result = await request("preload", {}, (message) => {
+        if (message.type === "preload-progress") handleDownloadProgress(message);
+      });
+      if (!result.ok) throw new Error(result.error || "toolchain download failed");
       toolchainReady.value = true;
       runLabel.value = "Run";
       status.value = "Ready";
@@ -131,16 +122,14 @@ export function useSwiftCompiler() {
     status.value = "Compiling...";
 
     try {
-      const result = (await request(
+      const result = await request(
         "compile",
         { files: workspace.files, primaryFile: workspace.primaryFile },
-        "result",
         (message) => {
-          if (message.type === "progress") status.value = message.message as string;
-          if (message.type === "download-progress")
-            handleDownloadProgress(message as unknown as DownloadProgress);
+          if (message.type === "progress") status.value = message.message;
+          if (message.type === "download-progress") handleDownloadProgress(message);
         },
-      )) as unknown as CompilerResult;
+      );
 
       problems.value = problemsFromResult(result);
       output.value = outputFromResult(result);
@@ -164,26 +153,17 @@ export function useSwiftCompiler() {
     }
   }
 
-  async function autocomplete(
-    workspace: WorkspaceSnapshot,
-    offset: number,
-  ): Promise<CompletionItem[]> {
+  async function autocomplete(workspace: WorkspaceSnapshot, offset: number) {
     if (!workspace.primaryFile) return [];
     const result = await request(
       "complete",
-      {
-        files: workspace.files,
-        primaryFile: workspace.primaryFile,
-        offset,
-      },
-      "completion-result",
+      { files: workspace.files, primaryFile: workspace.primaryFile, offset },
       (message) => {
-        if (message.type === "progress") status.value = message.message as string;
-        if (message.type === "download-progress")
-          handleDownloadProgress(message as unknown as DownloadProgress);
+        if (message.type === "progress") status.value = message.message;
+        if (message.type === "download-progress") handleDownloadProgress(message);
       },
     );
-    return (result.items as CompletionItem[]) ?? [];
+    return result.items ?? [];
   }
 
   function clearProblems() {

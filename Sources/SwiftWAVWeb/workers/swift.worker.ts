@@ -5,50 +5,199 @@
 // for the argv this mirrors — there is no on-wasm driver, since WASI can't
 // spawn processes, so the embedder replays swiftc's argv by hand.
 //
+// Also owns fetching those artifacts in the first place (with cumulative
+// download progress and once-only memoization) — nothing outside this file
+// needs any of that, so it isn't split into a separate module.
+//
 // Runs in a Worker because compiling/linking these modules is slow enough to
 // jank the main thread.
 
 import { Directory, File, PreopenDirectory } from "@bjorn3/browser_wasi_shim";
 import { untar } from "./tar";
 import { runWasiCommand } from "./wasi-run";
-import { bootOnce, fetchWithProgress, moduleLoader } from "./toolchain-assets";
-import type { CompilerResult, CompletionItem } from "../types";
 
-type SourceFiles = Record<string, string>;
-type WorkerMessage = { id: number; type: string; [key: string]: unknown };
+// ---------- Wire protocol ----------
+//
+// This worker is the source of truth for every shape that crosses the
+// postMessage boundary. useSwiftCompiler.ts imports these as `import type`,
+// which isolatedModules guarantees TypeScript erases entirely, so none of
+// the worker's runtime code (or its @bjorn3/browser_wasi_shim dependency)
+// ends up in the main bundle just because it imports these types.
+
+export type SourceFiles = Record<string, string>;
+
+export type CompilerResult = {
+  ok: boolean;
+  stage?: string;
+  diagnostics?: string[];
+  stdout?: string[];
+  stderr?: string[];
+  exitCode?: number;
+};
+
+export type CompletionItem = {
+  label: string;
+  detail: string;
+  kind: string;
+};
+
+export type WorkerRequest =
+  | { id: number; type: "preload" }
+  | { id: number; type: "compile"; files: SourceFiles; primaryFile: string }
+  | { id: number; type: "complete"; files: SourceFiles; primaryFile: string; offset: number };
+
+export type WorkerResponse =
+  | { id: number; type: "preload-progress"; loaded: number; total: number }
+  | { id: number; type: "preload-done"; ok: boolean; error?: string }
+  | { id: number; type: "progress"; message: string }
+  | { id: number; type: "download-progress"; loaded: number; total: number }
+  | ({ id: number; type: "result" } & CompilerResult)
+  | {
+      id: number;
+      type: "completion-result";
+      ok: boolean;
+      items: CompletionItem[];
+      diagnostics?: string[];
+      error?: string;
+    };
+
+/** The terminal response `type` a given request `type` resolves with. */
+export type ResultTypeFor<T extends WorkerRequest["type"]> = T extends "preload"
+  ? "preload-done"
+  : T extends "compile"
+    ? "result"
+    : "completion-result";
 
 interface CompletionResult {
-	items: CompletionItem[];
-	diagnostics: string[];
+  items: CompletionItem[];
+  diagnostics: string[];
 }
 
 interface SwiftCompiler {
-	compileAndRun: (files: SourceFiles, primaryFile: string, log: (message: string) => void) => Promise<CompilerResult>;
-	complete: (
-		files: SourceFiles,
-		primaryFile: string,
-		offset: number,
-		log: (message: string) => void,
-		onIdeTestProgress?: (loaded: number, total: number) => void
-	) => Promise<CompletionResult>;
+  compileAndRun: (
+    files: SourceFiles,
+    primaryFile: string,
+    log: (message: string) => void,
+  ) => Promise<CompilerResult>;
+  complete: (
+    files: SourceFiles,
+    primaryFile: string,
+    offset: number,
+    log: (message: string) => void,
+    onIdeTestProgress?: (loaded: number, total: number) => void,
+  ) => Promise<CompletionResult>;
 }
 
 const TOOLCHAIN_BASE = "/toolchain";
 
-// ---------- Message protocol ----------
-//
-// Request: { id, type: "preload" }
-//        | { id, type: "compile", files, primaryFile }
-//        | { id, type: "complete", files, primaryFile, offset }
-//
-// Response, always echoing the request's `id`:
-//   preload  -> "preload-progress" { loaded, total } * , then "preload-done" { ok, error? }
-//   compile  -> "progress" { message } | "download-progress" { loaded, total } * ,
-//               then "result" { ok, stage, diagnostics?, stdout?, stderr?, exitCode? }
-//   complete -> "progress" { message } | "download-progress" { loaded, total } * ,
-//               then "completion-result" { ok, items, diagnostics?, error? }
+const post = (msg: WorkerResponse) => self.postMessage(msg);
 
-const post = (msg: WorkerMessage) => self.postMessage(msg);
+// ---------- Fetching toolchain assets ----------
+
+type ProgressCallback = (loaded: number, total: number) => void;
+
+const downloadProgress = new Map<string, { loaded: number; total: number }>();
+
+/**
+ * Fetches `url`, reporting cumulative decoded-byte progress across every
+ * in-flight fetch made through this function, and returns a Response with
+ * `contentType` set (needed for WebAssembly.compileStreaming).
+ *
+ * The server sends these precompressed (gzip, per Content-Encoding); fetch
+ * transparently decodes before this ever sees a byte, so a compressed
+ * response's Content-Length isn't a valid decoded total, and progress for it
+ * is reported as indeterminate (0 total) rather than lied about.
+ */
+async function fetchWithProgress(
+  url: string,
+  onProgress?: ProgressCallback,
+  contentType?: string,
+): Promise<Response> {
+  const reportProgress = () => {
+    if (!onProgress) return;
+    let loaded = 0;
+    let total = 0;
+    for (const entry of downloadProgress.values()) {
+      loaded += entry.loaded;
+      total += entry.total;
+    }
+    onProgress(loaded, total);
+  };
+
+  downloadProgress.set(url, { loaded: 0, total: 0 });
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`fetching ${url} failed: ${res.status}`);
+  const total = res.headers.has("content-encoding")
+    ? 0
+    : Number(res.headers.get("content-length")) || 0;
+  downloadProgress.set(url, { loaded: 0, total });
+  reportProgress();
+  if (!res.body) throw new Error(`fetching ${url} returned an empty body`);
+
+  const reader = res.body.getReader();
+  const trackedStream = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      const { done, value } = await reader.read();
+      if (done) {
+        controller.close();
+        return;
+      }
+      const progress = downloadProgress.get(url);
+      if (progress) progress.loaded += value.byteLength;
+      reportProgress();
+      controller.enqueue(value);
+    },
+    cancel(reason) {
+      return reader.cancel(reason);
+    },
+  });
+  return new Response(
+    trackedStream,
+    contentType ? { headers: { "Content-Type": contentType } } : undefined,
+  );
+}
+
+/**
+ * Wraps an async `create` so that concurrent or repeated calls share one
+ * in-flight (or settled) promise instead of redoing the work. A rejection
+ * clears the memo, so the *next* call retries instead of replaying the same
+ * failure forever; a resolved memo ignores whatever `onProgress` a later
+ * caller passes, since there is nothing left to report progress on.
+ *
+ * `discard(value)` additionally evicts a *settled* result — for a resource
+ * that can go bad after it resolved (a corrupted cache, a dead connection),
+ * not just while it was loading. It's a no-op unless `value` is still the
+ * live one, so concurrent callers discarding the same broken instance don't
+ * evict two generations of it.
+ */
+function memoize<T>(create: (onProgress?: ProgressCallback) => Promise<T>) {
+  let promise: Promise<T> | null = null;
+  let value: T | null = null;
+  const get = (onProgress?: ProgressCallback) => {
+    if (!promise) {
+      promise = create(onProgress)
+        .then((v) => (value = v))
+        .catch((err) => {
+          promise = null;
+          throw err;
+        });
+    }
+    return promise;
+  };
+  const discard = (v: T) => {
+    if (value !== v) return;
+    value = null;
+    promise = null;
+  };
+  return { get, discard };
+}
+
+function moduleLoader(url: string): (onProgress?: ProgressCallback) => Promise<WebAssembly.Module> {
+  return memoize(async (onProgress) => {
+    const res = await fetchWithProgress(url, onProgress, "application/wasm");
+    return WebAssembly.compileStreaming(res);
+  }).get;
+}
 
 // ---------- Toolchain artifacts: fetched + compiled once, then shared ----------
 
@@ -61,122 +210,36 @@ const getLinkerModule = moduleLoader(`${TOOLCHAIN_BASE}/wasm-ld.wasm`);
 // rather than as part of the Run preload.
 const getIdeTestModule = moduleLoader(`${TOOLCHAIN_BASE}/swift-ide-test.wasm`);
 
-const getSysroot = bootOnce(async (onProgress?: (loaded: number, total: number) => void) => {
-	const res = await fetchWithProgress(`${TOOLCHAIN_BASE}/swift-sysroot-core.tar`, onProgress);
-	const buf = await res.arrayBuffer();
-	return untar(buf);
-});
+const getSysroot = memoize(async (onProgress?: ProgressCallback) => {
+  const res = await fetchWithProgress(`${TOOLCHAIN_BASE}/swift-sysroot-core.tar`, onProgress);
+  const buf = await res.arrayBuffer();
+  return untar(buf);
+}).get;
 
 /** Common `-frontend`-family flags shared by swift-frontend and swift-ide-test. */
 function commonFrontendArgs(): string[] {
-	return [
-		"-target",
-		"wasm32-unknown-wasip1",
-		"-disable-objc-interop",
-		"-sdk",
-		"/sysroot/wasi-sysroot",
-		"-resource-dir",
-		"/sysroot/swift/lib/swift_static",
-		// The Clang modules the stdlib depends on aren't prebuilt, so ask
-		// ClangImporter to build them itself, into the shared /module-cache
-		// preopen a SwiftCompiler mounts below.
-		"-Xcc",
-		"-fimplicit-module-maps",
-		"-Xcc",
-		"-fmodules-cache-path=/module-cache",
-		"-module-name",
-		"main",
-	];
-}
-
-// ---------- Boot: assemble the downloaded artifacts into a SwiftCompiler ----------
-
-/**
- * One boot, whoever asks.
- *
- * The promise is what's shared, not its result: a second request arriving
- * before instantiation finished would otherwise start a second download and
- * compile of ~350MB of WebAssembly.
- */
-let booting: Promise<SwiftCompiler> | null = null;
-const boot = (onProgress?: (loaded: number, total: number) => void) => (booting ??= instantiate(onProgress));
-
-/** The instance `booting` resolved to, while it's still fit to be asked. */
-let live: SwiftCompiler | null = null;
-
-/**
- * Throws `compiler` away, so the next request rebuilds a fresh instance.
- *
- * Called when a request against `compiler` throws rather than merely
- * returning a failing result — `runWasiCommand` already turns the ordinary
- * case (the user's program errors or fails to compile) into a nonzero exit
- * code, so anything that reaches here as a thrown value means something
- * about the *instance* broke. The one piece of state a SwiftCompiler carries
- * between requests is its ClangImporter module cache, and a broken instance
- * is exactly what a corrupt cache would look like: rebuilding costs the
- * multi-second module-cache warmup again, which is the right price for not
- * answering every request after it out of a poisoned cache.
- *
- * Does nothing if `compiler` is not the current instance, so two requests
- * failing together discard one instance rather than two.
- */
-function discard(compiler: SwiftCompiler): void {
-	if (live !== compiler) return;
-	live = null;
-	booting = null;
-}
-
-/**
- * Downloads the toolchain and assembles it into a `SwiftCompiler`.
- *
- * Call through `boot`, never directly.
- */
-async function instantiate(onProgress?: (loaded: number, total: number) => void): Promise<SwiftCompiler> {
-	const [frontendModule, linkerModule, sysroot] = await Promise.all([
-		getFrontendModule(onProgress),
-		getLinkerModule(onProgress),
-		getSysroot(onProgress),
-	]);
-
-	/**
-	 * The Clang module cache (SwiftShims, wasi-libc's own modules) that
-	 * ClangImporter builds on first use. It depends only on the sysroot and
-	 * target — never on user source — so it's mounted from one Directory kept
-	 * for the life of this compiler instance and shared by every request
-	 * against it, rather than rebuilt from scratch (a multi-second cost) on
-	 * every keystroke's completion request.
-	 */
-	const moduleCache = new Directory(new Map());
-
-	const sysrootPreopen = () => new PreopenDirectory("/sysroot", sysroot.contents);
-	const moduleCachePreopen = () => new PreopenDirectory("/module-cache", moduleCache.contents);
-
-	const compiler: SwiftCompiler = {
-		compileAndRun: async (files, primaryFile, log) => {
-			try {
-				return await compileAndRun(frontendModule, linkerModule, sysrootPreopen, moduleCachePreopen, files, primaryFile, log);
-			} catch (e) {
-				discard(compiler);
-				throw e;
-			}
-		},
-		complete: async (files, primaryFile, offset, log, onIdeTestProgress) => {
-			try {
-				const ideTestModule = await getIdeTestModule(onIdeTestProgress);
-				return await completeAt(ideTestModule, sysrootPreopen, moduleCachePreopen, files, primaryFile, offset, log);
-			} catch (e) {
-				discard(compiler);
-				throw e;
-			}
-		},
-	};
-	live = compiler;
-	return compiler;
+  return [
+    "-target",
+    "wasm32-unknown-wasip1",
+    "-disable-objc-interop",
+    "-sdk",
+    "/sysroot/wasi-sysroot",
+    "-resource-dir",
+    "/sysroot/swift/lib/swift_static",
+    // The Clang modules the stdlib depends on aren't prebuilt, so ask
+    // ClangImporter to build them itself, into the shared /module-cache
+    // preopen a SwiftCompiler mounts below.
+    "-Xcc",
+    "-fimplicit-module-maps",
+    "-Xcc",
+    "-fmodules-cache-path=/module-cache",
+    "-module-name",
+    "main",
+  ];
 }
 
 // ---------- Multi-file workspaces ----------
 
-type Preopen = () => PreopenDirectory;
 type Layout = { diskFiles: Map<string, string>; entryName: string } | { error: string };
 
 /**
@@ -200,190 +263,27 @@ type Layout = { diskFiles: Map<string, string>; entryName: string } | { error: s
  * @param primaryFile the active tab; the module's entry point
  */
 function layoutInputs(files: SourceFiles, primaryFile: string): Layout {
-	const names = Object.keys(files);
-	const entryName = names.length > 1 && primaryFile !== "main.swift" ? "main.swift" : primaryFile;
+  const names = Object.keys(files);
+  const entryName = names.length > 1 && primaryFile !== "main.swift" ? "main.swift" : primaryFile;
 
-	if (entryName !== primaryFile && names.includes(entryName)) {
-		return {
-			error:
-				`'main.swift' is reserved for whichever file is active when a workspace has more than one file, ` +
-				`but '${entryName}' isn't active right now. Rename it or switch to it before running.`,
-		};
-	}
+  if (entryName !== primaryFile && names.includes(entryName)) {
+    return {
+      error:
+        `'main.swift' is reserved for whichever file is active when a workspace has more than one file, ` +
+        `but '${entryName}' isn't active right now. Rename it or switch to it before running.`,
+    };
+  }
 
-	const diskFiles = new Map<string, string>();
-	for (const name of names) {
-		diskFiles.set(name === primaryFile ? entryName : name, files[name] ?? "");
-	}
-	return { diskFiles, entryName };
+  const diskFiles = new Map<string, string>();
+  for (const name of names) {
+    diskFiles.set(name === primaryFile ? entryName : name, files[name] ?? "");
+  }
+  return { diskFiles, entryName };
 }
 
-// ---------- The compile -> link -> run pipeline ----------
-
-/**
- * Compiles every file in the workspace as one module (whole-module
- * optimization is implicit whenever swift-frontend is given more than one
- * input and no `-primary-file`) and runs the result.
- *
- * @param files every workspace file, keyed by tab name
- * @param primaryFile the active tab; see `layoutInputs`
- */
-async function compileAndRun(
-	frontendModule: WebAssembly.Module,
-	linkerModule: WebAssembly.Module,
-	sysrootPreopen: Preopen,
-	moduleCachePreopen: Preopen,
-	files: SourceFiles,
-	primaryFile: string,
-	log: (message: string) => void
-): Promise<CompilerResult> {
-	const layout = layoutInputs(files, primaryFile);
-	if ("error" in layout) {
-		return { stage: "compile", ok: false, diagnostics: [layout.error], stdout: [] };
-	}
-	const { diskFiles } = layout;
-
-	const build = new Directory(new Map());
-	for (const [name, content] of diskFiles) {
-		build.contents.set(name, new File(new TextEncoder().encode(content)));
-	}
-	const buildPreopen = () => new PreopenDirectory("/build", build.contents);
-
-	// 1. swift-frontend: compile every file, together, to one object file.
-	log("compiling...");
-	const frontendArgv = (extraArgs: string[]) => [
-		"swift-frontend",
-		"-frontend",
-		"-c",
-		...[...diskFiles.keys()].map((name) => `/build/${name}`),
-		...commonFrontendArgs(),
-		...extraArgs,
-		"-use-static-resource-dir",
-		"-no-color-diagnostics",
-		"-empty-abi-descriptor",
-		"-o",
-		"/build/main.o",
-	];
-
-	let frontendResult = await runWasiCommand(frontendModule, frontendArgv([]), [
-		sysrootPreopen(),
-		moduleCachePreopen(),
-		buildPreopen(),
-	]);
-
-	// An `@main`-attributed entry point and bare top-level statements
-	// (`print(...)` outside any declaration) are mutually exclusive per
-	// invocation: the latter is only legal in a file the frontend treats as
-	// eligible for top-level code — which `-parse-as-library` turns off, and
-	// whose absence is what makes `@main` legal in the first place. Since which
-	// style a given workspace uses isn't known up front, the default (no flag)
-	// attempt is tried first, and this specific diagnostic — the only symptom
-	// an `@main` type produces under it — is what triggers the one retry with
-	// `-parse-as-library` added, rather than compiling twice unconditionally.
-	if (frontendResult.stderr.some((line) => line.includes("cannot be used in a module that contains top-level code"))) {
-		build.contents.delete("main.o");
-		frontendResult = await runWasiCommand(frontendModule, frontendArgv(["-parse-as-library"]), [
-			sysrootPreopen(),
-			moduleCachePreopen(),
-			buildPreopen(),
-		]);
-	}
-
-	if (frontendResult.exitCode !== 0 || !build.contents.has("main.o")) {
-		return {
-			stage: "compile",
-			ok: false,
-			diagnostics: frontendResult.stderr,
-			stdout: frontendResult.stdout,
-		};
-	}
-
-	// 2. wasm-ld: link the object file against the wasm32-wasip1 stdlib.
-	log("linking...");
-	const linkerArgv = [
-		"wasm-ld",
-		"-m",
-		"wasm32",
-		"-L/sysroot/swift/lib/swift_static/wasi",
-		"-L/sysroot/wasi-sysroot/lib/wasm32-wasip1",
-		"/sysroot/wasi-sysroot/lib/wasm32-wasip1/crt1-command.o",
-		"/sysroot/swift/lib/swift_static/wasi/wasm32/swiftrt.o",
-		"/build/main.o",
-		"-lswiftSwiftOnoneSupport",
-		"-lswiftCore",
-		"-lswift_Concurrency",
-		"-lswift_StringProcessing",
-		"-lswift_RegexParser",
-		"-ldl",
-		"-lc++",
-		"-lc++abi",
-		"-lm",
-		"-lwasi-emulated-mman",
-		"-lwasi-emulated-signal",
-		"-lwasi-emulated-process-clocks",
-		"--error-limit=0",
-		"--threads=1",
-		"--global-base=4096",
-		"--table-base=4096",
-		"-z",
-		"stack-size=131072",
-		"-lc",
-		"/sysroot/swift/lib/swift_static/clang/lib/wasip1/libclang_rt.builtins-wasm32.a",
-		"-o",
-		"/build/program.wasm",
-	];
-
-	const linkResult = await runWasiCommand(linkerModule, linkerArgv, [sysrootPreopen(), buildPreopen()]);
-	const programFile = build.contents.get("program.wasm");
-	if (linkResult.exitCode !== 0 || !(programFile instanceof File)) {
-		return {
-			stage: "link",
-			ok: false,
-			diagnostics: linkResult.stderr,
-			stdout: linkResult.stdout,
-		};
-	}
-
-	// 3. Run the freshly linked program itself.
-	log("running...");
-	const programModule = await WebAssembly.compile(programFile.data as BufferSource);
-	const runResult = await runWasiCommand(programModule, ["program"], []);
-
-	return {
-		stage: "run",
-		ok: runResult.exitCode === 0,
-		exitCode: runResult.exitCode,
-		stdout: runResult.stdout,
-		stderr: runResult.stderr,
-		diagnostics: [...frontendResult.stderr, ...linkResult.stderr],
-	};
-}
-
-// ---------- Code completion via swift-ide-test ----------
+// ---------- Code completion parsing ----------
 
 const COMPLETION_TOKEN = "COMPLETE";
-
-// Maps a "Decl[InstanceMethod]", "Keyword[func]", "Pattern/Local", etc. kind
-// tag (see CodeCompletionResult::printPrefix in the Swift compiler) to a
-// coarse CodeMirror-style completion type, used for icons/filtering.
-function completionKindFor(tag: string): string {
-	if (tag.startsWith("Keyword")) return "keyword";
-	if (tag.startsWith("Decl[Module]")) return "namespace";
-	if (/\[(Class|Actor)\]/.test(tag)) return "class";
-	if (/\[(Struct|Enum|Protocol|TypeAlias|AssociatedType|GenericTypeParam)\]/.test(tag)) return "type";
-	if (tag.includes("[EnumElement]")) return "enum";
-	if (/\[(InstanceMethod|StaticMethod|FreeFunction|Constructor|Destructor|.*OperatorFunction)\]/.test(tag))
-		return "function";
-	if (/\[(InstanceVar|StaticVar|LocalVar|GlobalVar)\]/.test(tag)) return "variable";
-	return "text";
-}
-
-// Turns a completion string like "foo([#(x): Int#])[#Void#]" into readable
-// text by dropping swift-ide-test's placeholder/result-type delimiters
-// ("[#" ... "#]"), giving "foo((x): Int)Void".
-function stripCompletionMarkup(text: string): string {
-	return text.replace(/\[#/g, "").replace(/#\]/g, "");
-}
 
 /**
  * Parses swift-ide-test's `-code-completion` stdout. Each result line looks
@@ -395,146 +295,378 @@ function stripCompletionMarkup(text: string): string {
  * comments/sourcetext aren't requested here).
  */
 function parseCompletionResults(stdoutLines: string[]): CompletionItem[] {
-	const text = stdoutLines.join("\n");
-	const beginIdx = text.indexOf("Begin completions");
-	if (beginIdx === -1) return [];
-	const endIdx = text.indexOf("End completions", beginIdx);
-	const block = text.slice(beginIdx, endIdx === -1 ? undefined : endIdx);
+  // Maps a "Decl[InstanceMethod]", "Keyword[func]", "Pattern/Local", etc.
+  // kind tag (see CodeCompletionResult::printPrefix in the Swift compiler)
+  // to a coarse CodeMirror-style completion type, used for icons/filtering.
+  function completionKindFor(tag: string): string {
+    if (tag.startsWith("Keyword")) return "keyword";
+    if (tag.startsWith("Decl[Module]")) return "namespace";
+    if (/\[(Class|Actor)\]/.test(tag)) return "class";
+    if (/\[(Struct|Enum|Protocol|TypeAlias|AssociatedType|GenericTypeParam)\]/.test(tag))
+      return "type";
+    if (tag.includes("[EnumElement]")) return "enum";
+    if (
+      /\[(InstanceMethod|StaticMethod|FreeFunction|Constructor|Destructor|.*OperatorFunction)\]/.test(
+        tag,
+      )
+    )
+      return "function";
+    if (/\[(InstanceVar|StaticVar|LocalVar|GlobalVar)\]/.test(tag)) return "variable";
+    return "text";
+  }
 
-	const items: CompletionItem[] = [];
-	const seen = new Set<string>();
-	for (const line of block.split("\n").slice(1)) {
-		if (!line.trim()) continue;
-		const sepIdx = line.indexOf(": ");
-		if (sepIdx === -1) continue;
-		const tag = line.slice(0, sepIdx);
-		const rest = line.slice(sepIdx + 2).replace(/^ +/, "");
-		const nameIdx = rest.lastIndexOf("; name=");
-		const completionText = nameIdx === -1 ? rest : rest.slice(0, nameIdx);
-		const name = nameIdx === -1 ? completionText : rest.slice(nameIdx + "; name=".length).trim();
-		if (!name || seen.has(name)) continue;
-		seen.add(name);
-		items.push({
-			label: name,
-			detail: stripCompletionMarkup(completionText),
-			kind: completionKindFor(tag),
-		});
-	}
-	return items;
+  // Turns a completion string like "foo([#(x): Int#])[#Void#]" into readable
+  // text by dropping swift-ide-test's placeholder/result-type delimiters
+  // ("[#" ... "#]"), giving "foo((x): Int)Void".
+  function stripCompletionMarkup(text: string): string {
+    return text.replace(/\[#/g, "").replace(/#\]/g, "");
+  }
+
+  const text = stdoutLines.join("\n");
+  const beginIdx = text.indexOf("Begin completions");
+  if (beginIdx === -1) return [];
+  const endIdx = text.indexOf("End completions", beginIdx);
+  const block = text.slice(beginIdx, endIdx === -1 ? undefined : endIdx);
+
+  const items: CompletionItem[] = [];
+  const seen = new Set<string>();
+  for (const line of block.split("\n").slice(1)) {
+    if (!line.trim()) continue;
+    const sepIdx = line.indexOf(": ");
+    if (sepIdx === -1) continue;
+    const tag = line.slice(0, sepIdx);
+    const rest = line.slice(sepIdx + 2).replace(/^ +/, "");
+    const nameIdx = rest.lastIndexOf("; name=");
+    const completionText = nameIdx === -1 ? rest : rest.slice(0, nameIdx);
+    const name = nameIdx === -1 ? completionText : rest.slice(nameIdx + "; name=".length).trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    items.push({
+      label: name,
+      detail: stripCompletionMarkup(completionText),
+      kind: completionKindFor(tag),
+    });
+  }
+  return items;
 }
+
+// ---------- Boot: assemble the downloaded artifacts into a SwiftCompiler ----------
 
 /**
- * Runs swift-ide-test's `-code-completion` at `offset` (a UTF-8 byte offset
- * into `files[primaryFile]`), with every other workspace file loaded
- * alongside it so completion sees declarations from the whole module, and
- * returns the parsed completion list.
+ * One boot, whoever asks — this runs once, and every request shares its
+ * promise (or its settled instance) instead of repeating a ~350MB download
+ * and compile.
  *
- * @param files every workspace file, keyed by tab name
- * @param primaryFile the file `offset` is measured into; see `layoutInputs`
+ * `discard` additionally lets a request evict a *resolved* instance mid-life:
+ * called when a request against it throws rather than merely returning a
+ * failing result — `runWasiCommand` already turns the ordinary case (the
+ * user's program errors or fails to compile) into a nonzero exit code, so
+ * anything that reaches here as a thrown value means something about the
+ * instance itself broke. The one piece of state a SwiftCompiler carries
+ * between requests is its ClangImporter module cache, and a broken instance
+ * is exactly what a corrupt cache would look like: rebuilding costs the
+ * multi-second module-cache warmup again, which is the right price for not
+ * answering every request after it out of a poisoned cache.
  */
-async function completeAt(
-	ideTestModule: WebAssembly.Module,
-	sysrootPreopen: Preopen,
-	moduleCachePreopen: Preopen,
-	files: SourceFiles,
-	primaryFile: string,
-	offset: number,
-	log: (message: string) => void
-): Promise<CompletionResult> {
-	const layout = layoutInputs(files, primaryFile);
-	if ("error" in layout) {
-		return { items: [], diagnostics: [layout.error] };
-	}
-	const { diskFiles, entryName } = layout;
+const { get: boot, discard } = memoize(
+  async (onProgress?: ProgressCallback): Promise<SwiftCompiler> => {
+    const [frontendModule, linkerModule, sysroot] = await Promise.all([
+      getFrontendModule(onProgress),
+      getLinkerModule(onProgress),
+      getSysroot(onProgress),
+    ]);
 
-	const source = files[primaryFile] ?? "";
-	const bytes = new TextEncoder().encode(source);
-	const clampedOffset = Math.max(0, Math.min(offset, bytes.length));
-	const withToken =
-		new TextDecoder().decode(bytes.subarray(0, clampedOffset)) +
-		`#^${COMPLETION_TOKEN}^#` +
-		new TextDecoder().decode(bytes.subarray(clampedOffset));
+    /**
+     * The Clang module cache (SwiftShims, wasi-libc's own modules) that
+     * ClangImporter builds on first use. It depends only on the sysroot and
+     * target — never on user source — so it's mounted from one Directory kept
+     * for the life of this compiler instance and shared by every request
+     * against it, rather than rebuilt from scratch (a multi-second cost) on
+     * every keystroke's completion request.
+     */
+    const moduleCache = new Directory(new Map());
 
-	const build = new Directory(new Map());
-	for (const [name, content] of diskFiles) {
-		build.contents.set(name, new File(new TextEncoder().encode(name === entryName ? withToken : content)));
-	}
-	const buildPreopen = () => new PreopenDirectory("/build", build.contents);
+    const sysrootPreopen = () => new PreopenDirectory("/sysroot", sysroot.contents);
+    const moduleCachePreopen = () => new PreopenDirectory("/module-cache", moduleCache.contents);
 
-	log("completing...");
-	// -source-filename is the file the token lives in; the rest of the module
-	// is given positionally so declarations in other files are in scope too.
-	const otherFiles = [...diskFiles.keys()].filter((name) => name !== entryName);
-	const argv = [
-		"swift-ide-test",
-		"-code-completion",
-		"-source-filename",
-		`/build/${entryName}`,
-		`-code-completion-token=${COMPLETION_TOKEN}`,
-		...otherFiles.map((name) => `/build/${name}`),
-		...commonFrontendArgs(),
-	];
+    const compiler: SwiftCompiler = {
+      // Compiles every file in the workspace as one module (whole-module
+      // optimization is implicit whenever swift-frontend is given more than
+      // one input and no `-primary-file`) and runs the result.
+      compileAndRun: async (files, primaryFile, log) => {
+        try {
+          const layout = layoutInputs(files, primaryFile);
+          if ("error" in layout) {
+            return { stage: "compile", ok: false, diagnostics: [layout.error], stdout: [] };
+          }
+          const { diskFiles } = layout;
 
-	const result = await runWasiCommand(ideTestModule, argv, [sysrootPreopen(), moduleCachePreopen(), buildPreopen()]);
-	return { items: parseCompletionResults(result.stdout), diagnostics: result.stderr };
-}
+          const build = new Directory(new Map());
+          for (const [name, content] of diskFiles) {
+            build.contents.set(name, new File(new TextEncoder().encode(content)));
+          }
+          const buildPreopen = () => new PreopenDirectory("/build", build.contents);
+
+          // 1. swift-frontend: compile every file, together, to one object file.
+          log("compiling...");
+          const frontendArgv = (extraArgs: string[]) => [
+            "swift-frontend",
+            "-frontend",
+            "-c",
+            ...[...diskFiles.keys()].map((name) => `/build/${name}`),
+            ...commonFrontendArgs(),
+            ...extraArgs,
+            "-use-static-resource-dir",
+            "-no-color-diagnostics",
+            "-empty-abi-descriptor",
+            "-o",
+            "/build/main.o",
+          ];
+
+          let frontendResult = await runWasiCommand(frontendModule, frontendArgv([]), [
+            sysrootPreopen(),
+            moduleCachePreopen(),
+            buildPreopen(),
+          ]);
+
+          // An `@main`-attributed entry point and bare top-level statements
+          // (`print(...)` outside any declaration) are mutually exclusive per
+          // invocation: the latter is only legal in a file the frontend treats
+          // as eligible for top-level code — which `-parse-as-library` turns
+          // off, and whose absence is what makes `@main` legal in the first
+          // place. Since which style a given workspace uses isn't known up
+          // front, the default (no flag) attempt is tried first, and this
+          // specific diagnostic — the only symptom an `@main` type produces
+          // under it — is what triggers the one retry with `-parse-as-library`
+          // added, rather than compiling twice unconditionally.
+          if (
+            frontendResult.stderr.some((line) =>
+              line.includes("cannot be used in a module that contains top-level code"),
+            )
+          ) {
+            build.contents.delete("main.o");
+            frontendResult = await runWasiCommand(
+              frontendModule,
+              frontendArgv(["-parse-as-library"]),
+              [sysrootPreopen(), moduleCachePreopen(), buildPreopen()],
+            );
+          }
+
+          if (frontendResult.exitCode !== 0 || !build.contents.has("main.o")) {
+            return {
+              stage: "compile",
+              ok: false,
+              diagnostics: frontendResult.stderr,
+              stdout: frontendResult.stdout,
+            };
+          }
+
+          // 2. wasm-ld: link the object file against the wasm32-wasip1 stdlib.
+          log("linking...");
+          const linkerArgv = [
+            "wasm-ld",
+            "-m",
+            "wasm32",
+            "-L/sysroot/swift/lib/swift_static/wasi",
+            "-L/sysroot/wasi-sysroot/lib/wasm32-wasip1",
+            "/sysroot/wasi-sysroot/lib/wasm32-wasip1/crt1-command.o",
+            "/sysroot/swift/lib/swift_static/wasi/wasm32/swiftrt.o",
+            "/build/main.o",
+            "-lswiftSwiftOnoneSupport",
+            "-lswiftCore",
+            "-lswift_Concurrency",
+            "-lswift_StringProcessing",
+            "-lswift_RegexParser",
+            "-ldl",
+            "-lc++",
+            "-lc++abi",
+            "-lm",
+            "-lwasi-emulated-mman",
+            "-lwasi-emulated-signal",
+            "-lwasi-emulated-process-clocks",
+            "--error-limit=0",
+            "--threads=1",
+            "--global-base=4096",
+            "--table-base=4096",
+            "-z",
+            "stack-size=131072",
+            "-lc",
+            "/sysroot/swift/lib/swift_static/clang/lib/wasip1/libclang_rt.builtins-wasm32.a",
+            "-o",
+            "/build/program.wasm",
+          ];
+
+          const linkResult = await runWasiCommand(linkerModule, linkerArgv, [
+            sysrootPreopen(),
+            buildPreopen(),
+          ]);
+          const programFile = build.contents.get("program.wasm");
+          if (linkResult.exitCode !== 0 || !(programFile instanceof File)) {
+            return {
+              stage: "link",
+              ok: false,
+              diagnostics: linkResult.stderr,
+              stdout: linkResult.stdout,
+            };
+          }
+
+          // 3. Run the freshly linked program itself.
+          log("running...");
+          const programModule = await WebAssembly.compile(programFile.data as BufferSource);
+          const runResult = await runWasiCommand(programModule, ["program"], []);
+
+          return {
+            stage: "run",
+            ok: runResult.exitCode === 0,
+            exitCode: runResult.exitCode,
+            stdout: runResult.stdout,
+            stderr: runResult.stderr,
+            diagnostics: [...frontendResult.stderr, ...linkResult.stderr],
+          };
+        } catch (e) {
+          discard(compiler);
+          throw e;
+        }
+      },
+
+      // Runs swift-ide-test's `-code-completion` at `offset` (a UTF-8 byte
+      // offset into `files[primaryFile]`), with every other workspace file
+      // loaded alongside it so completion sees declarations from the whole
+      // module, and returns the parsed completion list.
+      complete: async (files, primaryFile, offset, log, onIdeTestProgress) => {
+        try {
+          const ideTestModule = await getIdeTestModule(onIdeTestProgress);
+
+          const layout = layoutInputs(files, primaryFile);
+          if ("error" in layout) {
+            return { items: [], diagnostics: [layout.error] };
+          }
+          const { diskFiles, entryName } = layout;
+
+          const source = files[primaryFile] ?? "";
+          const bytes = new TextEncoder().encode(source);
+          const clampedOffset = Math.max(0, Math.min(offset, bytes.length));
+          const withToken =
+            new TextDecoder().decode(bytes.subarray(0, clampedOffset)) +
+            `#^${COMPLETION_TOKEN}^#` +
+            new TextDecoder().decode(bytes.subarray(clampedOffset));
+
+          const build = new Directory(new Map());
+          for (const [name, content] of diskFiles) {
+            build.contents.set(
+              name,
+              new File(new TextEncoder().encode(name === entryName ? withToken : content)),
+            );
+          }
+          const buildPreopen = () => new PreopenDirectory("/build", build.contents);
+
+          log("completing...");
+          // -source-filename is the file the token lives in; the rest of the
+          // module is given positionally so declarations in other files are
+          // in scope too.
+          const otherFiles = [...diskFiles.keys()].filter((name) => name !== entryName);
+          const argv = [
+            "swift-ide-test",
+            "-code-completion",
+            "-source-filename",
+            `/build/${entryName}`,
+            `-code-completion-token=${COMPLETION_TOKEN}`,
+            ...otherFiles.map((name) => `/build/${name}`),
+            ...commonFrontendArgs(),
+          ];
+
+          const result = await runWasiCommand(ideTestModule, argv, [
+            sysrootPreopen(),
+            moduleCachePreopen(),
+            buildPreopen(),
+          ]);
+          return { items: parseCompletionResults(result.stdout), diagnostics: result.stderr };
+        } catch (e) {
+          discard(compiler);
+          throw e;
+        }
+      },
+    };
+    return compiler;
+  },
+);
 
 // ---------- Request dispatch ----------
 
-const handlers: Record<string, (msg: WorkerMessage) => Promise<void>> = {
-	async preload(msg) {
-		const onProgress = (loaded: number, total: number) => post({ id: msg.id, type: "preload-progress", loaded, total });
-		try {
-			await boot(onProgress);
-			post({ id: msg.id, type: "preload-done", ok: true });
-		} catch (err) {
-			const error = err as { message?: string } | undefined;
-			post({ id: msg.id, type: "preload-done", ok: false, error: String((error && error.message) || error) });
-		}
-	},
+self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
+  const msg = event.data;
 
-	async complete(msg) {
-		const { files, primaryFile, offset } = msg as unknown as { files: SourceFiles; primaryFile: string; offset: number };
-		const log = (message: string) => post({ id: msg.id, type: "progress", message });
-		const onProgress = (loaded: number, total: number) => post({ id: msg.id, type: "download-progress", loaded, total });
-		try {
-			const compiler = await boot(onProgress);
-			const { items, diagnostics } = await compiler.complete(files, primaryFile, offset, log, onProgress);
-			post({ id: msg.id, type: "completion-result", ok: true, items, diagnostics });
-		} catch (err) {
-			const error = err as { stack?: string } | undefined;
-			post({
-				id: msg.id,
-				type: "completion-result",
-				ok: false,
-				items: [],
-				error: String((error && error.stack) || error),
-			});
-		}
-	},
+  /** `err.message`, or `err.stack` for the extra detail internal-error diagnostics want. */
+  function errorDetail(err: unknown, field: "message" | "stack" = "message"): string {
+    if (err instanceof Error) return (field === "stack" ? err.stack : err.message) ?? String(err);
+    return String(err);
+  }
 
-	async compile(msg) {
-		const { files, primaryFile } = msg as unknown as { files: SourceFiles; primaryFile: string };
-		const log = (message: string) => post({ id: msg.id, type: "progress", message });
-		const onProgress = (loaded: number, total: number) => post({ id: msg.id, type: "download-progress", loaded, total });
-		try {
-			const compiler = await boot(onProgress);
-			const result = await compiler.compileAndRun(files, primaryFile, log);
-			post({ id: msg.id, type: "result", ...result });
-		} catch (err) {
-			const error = err as { stack?: string } | undefined;
-			post({
-				id: msg.id,
-				type: "result",
-				ok: false,
-				stage: "internal",
-				diagnostics: [String((error && error.stack) || error)],
-			});
-		}
-	},
-};
+  /** The progress channels every request type reports through, scoped to this request's `id`. */
+  function progressReporter() {
+    return {
+      log: (message: string) => post({ id: msg.id, type: "progress", message }),
+      onProgress: (loaded: number, total: number) =>
+        post({ id: msg.id, type: "download-progress", loaded, total }),
+    };
+  }
 
-self.onmessage = (event: MessageEvent<WorkerMessage>) => {
-	const handler = handlers[event.data.type];
-	if (handler) void handler(event.data);
-};
+  switch (msg.type) {
+    case "preload": {
+      const onProgress = (loaded: number, total: number) =>
+        post({ id: msg.id, type: "preload-progress", loaded, total });
+      try {
+        await boot(onProgress);
+        post({ id: msg.id, type: "preload-done", ok: true });
+      } catch (err) {
+        post({ id: msg.id, type: "preload-done", ok: false, error: errorDetail(err) });
+      }
+      return;
+    }
+
+    case "complete": {
+      const { log, onProgress } = progressReporter();
+      try {
+        const compiler = await boot(onProgress);
+        const { items, diagnostics } = await compiler.complete(
+          msg.files,
+          msg.primaryFile,
+          msg.offset,
+          log,
+          onProgress,
+        );
+        post({ id: msg.id, type: "completion-result", ok: true, items, diagnostics });
+      } catch (err) {
+        post({
+          id: msg.id,
+          type: "completion-result",
+          ok: false,
+          items: [],
+          error: errorDetail(err, "stack"),
+        });
+      }
+      return;
+    }
+
+    case "compile": {
+      const { log, onProgress } = progressReporter();
+      try {
+        const compiler = await boot(onProgress);
+        const result = await compiler.compileAndRun(msg.files, msg.primaryFile, log);
+        post({ id: msg.id, type: "result", ...result });
+      } catch (err) {
+        post({
+          id: msg.id,
+          type: "result",
+          ok: false,
+          stage: "internal",
+          diagnostics: [errorDetail(err, "stack")],
+        });
+      }
+      return;
+    }
+
+    default:
+      msg satisfies never;
+  }
+});

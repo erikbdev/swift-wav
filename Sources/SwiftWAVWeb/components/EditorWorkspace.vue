@@ -2,7 +2,8 @@
 import { computed, nextTick, ref, unref, watch } from "vue";
 import { useCodeMirror } from "../composables/useCodeMirror";
 import { problemLocation } from "../utils/compiler-output";
-import type { CompletionItem, OutputLine, Problem } from "../types";
+import type { OutputLine, Problem } from "../types";
+import type { CompletionItem } from "../workers/swift.worker";
 
 const props = defineProps<{
   files: Record<string, string>;
