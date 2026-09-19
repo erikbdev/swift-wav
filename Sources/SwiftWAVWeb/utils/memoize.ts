@@ -5,7 +5,6 @@ export function memoize<T>(fn: () => T) {
     () => {
       if (!set) {
         const result = fn();
-        set = true;
         if (result instanceof Promise) {
           value = result.catch((e) => {
             set = false;
@@ -15,6 +14,7 @@ export function memoize<T>(fn: () => T) {
         } else {
           value = result;
         }
+        set = true;
       }
       return value as T;
     },

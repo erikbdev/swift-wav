@@ -1,15 +1,12 @@
 <script setup lang="ts" vapor>
 import { computed, nextTick, ref, unref, watch } from "vue";
 import { useCodeMirror } from "../composables/useCodeMirror";
-import { problemLocation } from "../utils/compiler-output";
-import type { OutputLine, Problem } from "../types";
-import type { CompletionItem } from "../workers/swift.worker";
+import type { CompletionItem, Diagnostic } from "../workers/swift.worker";
 
 const props = defineProps<{
   files: Record<string, string>;
   activeFile: string;
-  problems: Problem[];
-  output: OutputLine[];
+  diagnostics: Diagnostic[];
   requestCompletions: (position: number) => Promise<CompletionItem[]>;
 }>();
 
@@ -22,12 +19,8 @@ const emit = defineEmits<{
 
 const fileMap = computed(() => unref(props.files) || {});
 const currentFile = computed(() => unref(props.activeFile) || "");
-const problemList = computed(() => {
-  const value = unref(props.problems);
-  return Array.isArray(value) ? value : [];
-});
-const outputLines = computed(() => {
-  const value = unref(props.output);
+const diagnosticList = computed(() => {
+  const value = unref(props.diagnostics);
   return Array.isArray(value) ? value : [];
 });
 
@@ -95,44 +88,33 @@ watch(
 
 // ---------- Problems and output ----------
 
-const problemsOpen = ref(false);
-const outputOpen = ref(false);
-const errorCount = computed(() => problemList.value.filter((problem) => problem.severity === "error").length);
-const warningCount = computed(() => problemList.value.filter((problem) => problem.severity === "warning").length);
-const problemsStatus = computed(() =>
-  problemList.value.length ? `${errorCount.value} error${errorCount.value === 1 ? "" : "s"}, ${warningCount.value} warning${warningCount.value === 1 ? "" : "s"}` : "No issues",
-);
+const diagnosticsOpen = ref(false);
+const errorCount = computed(() => diagnosticList.value.filter((problem) => problem.severity === "error").length);
+const warningCount = computed(() => diagnosticList.value.filter((problem) => problem.severity === "warning").length);
 
 // A failed compile should surface its diagnostics immediately, while an
 // edit clears the panel through the compiler composable just like an IDE.
 watch(
-  () => problemList.value,
-  (nextProblems) => {
-    if (nextProblems.length) {
-      problemsOpen.value = true;
-      outputOpen.value = false;
+  () => diagnosticList.value,
+  (nextDiagnostic) => {
+    if (nextDiagnostic.length) {
+      diagnosticsOpen.value = true;
     } else {
-      problemsOpen.value = false;
+      diagnosticsOpen.value = false;
     }
   },
 );
 
-function toggleProblems() {
-  problemsOpen.value = !problemsOpen.value;
-  if (problemsOpen.value) outputOpen.value = false;
+function toggleDiagnostics() {
+  diagnosticsOpen.value = !diagnosticsOpen.value;
 }
 
-function toggleOutput() {
-  outputOpen.value = !outputOpen.value;
-  if (outputOpen.value) problemsOpen.value = false;
-}
-
-async function revealProblem(problem: Problem) {
-  const target = Object.keys(fileMap.value).find((name) => problem.file?.endsWith(name));
+async function revealDiagnostic(diagnostic: Diagnostic) {
+  const target = Object.keys(fileMap.value).find((name) => diagnostic.file?.endsWith(name));
   if (target && target !== currentFile.value) emit("select-file", target);
 
   await nextTick();
-  editor.reveal(problem);
+  editor.reveal(diagnostic);
 }
 </script>
 
@@ -163,39 +145,26 @@ async function revealProblem(problem: Problem) {
     <div ref="editorHost" class="cm-host"></div>
 
     <div class="problems-bar">
-      <button class="problems-toggle" :class="{ 'has-errors': errorCount, 'has-warnings': !errorCount && warningCount }" type="button" :aria-expanded="problemsOpen" @click="toggleProblems">
+      <button class="problems-toggle" :class="{ 'has-errors': errorCount, 'has-warnings': !errorCount && warningCount }" type="button" :aria-expanded="diagnosticsOpen" @click="toggleDiagnostics">
         <span class="problems-icon">{{ errorCount || warningCount ? "!" : "✓" }}</span>
-        <span>Problems</span>
-        <span class="problems-count">{{ problemList.length }}</span>
+        <span>Diagnostics</span>
+        <span class="problems-count">{{ diagnosticList.length }}</span>
       </button>
-      <button class="output-toggle" :class="{ 'has-output': outputLines.length }" type="button" :aria-expanded="outputOpen" @click="toggleOutput">
-        <span class="output-icon">{{ outputLines.length ? "•" : "›" }}</span>
-        <span>Output</span>
-        <span class="output-count">{{ outputLines.length }}</span>
-      </button>
-      <span class="problems-status">{{ problemsStatus }}</span>
     </div>
 
-    <div class="problems-panel" :hidden="!problemsOpen">
-      <div v-if="!problemList.length" class="problems-empty">No Swift problems detected.</div>
+    <div class="problems-panel" :hidden="!diagnosticsOpen">
+      <div v-if="!diagnosticList.length" class="problems-empty">No diagnostics.</div>
       <button
-        v-for="problem in problemList"
-        :key="`${problem.severity}:${problem.file}:${problem.line}:${problem.column}:${problem.message}`"
+        v-for="diagnostic in diagnosticList"
+        :key="`${diagnostic.severity}:${diagnostic.file}:${diagnostic.line}:${diagnostic.column}:${diagnostic.label}:${diagnostic.message}`"
         type="button"
-        :class="['problem-item', problem.severity]"
-        @click="revealProblem(problem)"
+        :class="['problem-item', diagnostic.severity]"
+        @click="revealDiagnostic(diagnostic)"
       >
-        <span class="problem-severity"></span>
-        <span class="problem-location">{{ problemLocation(problem) }}</span>
-        <span class="problem-message">{{ problem.message }}</span>
+        <!-- <span class="problem-location">{{ [diagnostic.file, diagnostic.line, diagnostic.column].filter((s) => s !== null && s !== undefined).join(":") }}</span> -->
+        <!-- <span class="problem-severity">{{ diagnostic.severity }}</span> -->
+        <!-- <span class="problem-message">{{ diagnostic.message }}</span> -->
       </button>
-    </div>
-
-    <div class="output-panel" :hidden="!outputOpen">
-      <div v-if="!outputLines.length" class="output-empty">Run the active Swift file to see its output.</div>
-      <div v-for="(line, index) in outputLines" :key="`${index}:${line.text}`" :class="['output-line', line.kind || 'stdout']">
-        {{ line.text }}
-      </div>
     </div>
   </div>
 </template>
@@ -412,48 +381,7 @@ async function revealProblem(problem: Problem) {
 .problems-status {
   color: var(--text-3);
 }
-.output-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 24px;
-  padding: 0 8px;
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--text-1);
-  font: inherit;
-  cursor: pointer;
-}
-.output-toggle:hover,
-.output-toggle[aria-expanded="true"] {
-  background: var(--bg-3);
-  border-color: var(--border);
-  color: var(--text-0);
-}
-.output-icon {
-  display: inline-grid;
-  place-items: center;
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  background: var(--text-3);
-  color: var(--bg-0);
-  font-size: 10px;
-  font-weight: 700;
-}
-.output-toggle.has-output .output-icon {
-  background: var(--blue);
-  color: #fff;
-}
-.output-count {
-  min-width: 16px;
-  padding: 1px 5px;
-  border-radius: 10px;
-  background: var(--bg-4);
-  color: var(--text-1);
-  text-align: center;
-}
+
 .problems-panel {
   position: absolute;
   right: 8px;
@@ -469,90 +397,52 @@ async function revealProblem(problem: Problem) {
   background: rgba(27, 26, 24, 0.98);
   box-shadow: var(--shadow-card);
 }
-.problem-item {
-  display: grid;
-  grid-template-columns: 9px minmax(100px, 175px) 1fr;
-  align-items: center;
-  gap: 9px;
-  min-height: 38px;
-  padding: 7px 11px;
-  width: 100%;
-  border: 0;
-  border-bottom: 1px solid var(--border-faint);
-  background: transparent;
-  color: var(--text-1);
-  cursor: pointer;
-  font: inherit;
-  text-align: left;
-}
-.problem-item:last-child {
-  border-bottom: 0;
-}
-.problem-item:hover {
-  background: var(--bg-3);
-}
-.problem-severity {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--amber);
-}
-.problem-item.error .problem-severity {
-  background: var(--red);
-}
-.problem-location {
-  overflow: hidden;
-  color: var(--text-3);
-  font: 10px var(--mono);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.problem-message {
-  overflow-x: hidden;
-  color: var(--text-0);
-  font-size: 11.5px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+/* .problem-item { */
+/*   display: grid; */
+/*   grid-template-columns: 9px minmax(100px, 175px) 1fr; */
+/*   align-items: center; */
+/*   gap: 9px; */
+/*   min-height: 38px; */
+/*   padding: 7px 11px; */
+/*   width: 100%; */
+/*   border: 0; */
+/*   border-bottom: 1px solid var(--border-faint); */
+/*   background: transparent; */
+/*   color: var(--text-1); */
+/*   cursor: pointer; */
+/*   font: inherit; */
+/*   text-align: left; */
+/* } */
+/* .problem-item:last-child { */
+/*   border-bottom: 0; */
+/* } */
+/* .problem-item:hover { */
+/*   background: var(--bg-3); */
+/* } */
+/* .problem-severity { */
+/*   width: 7px; */
+/*   height: 7px; */
+/*   border-radius: 50%; */
+/*   background: var(--amber); */
+/* } */
+/* .problem-item.error .problem-severity { */
+/*   background: var(--red); */
+/* } */
+/* .problem-location { */
+/*   overflow: hidden; */
+/*   color: var(--text-3); */
+/*   font: 10px var(--mono); */
+/*   text-overflow: ellipsis; */
+/*   white-space: nowrap; */
+/* } */
+/* .problem-message { */
+/*   overflow-x: hidden; */
+/*   color: var(--text-0); */
+/*   font-size: 11.5px; */
+/*   text-overflow: ellipsis; */
+/*   white-space: nowrap; */
+/* } */
 .problems-empty {
-  padding: 14px;
-  color: var(--text-3);
-  font: 11px var(--mono);
-}
-.output-panel {
-  position: absolute;
-  right: 8px;
-  bottom: 38px;
-  left: 8px;
-  z-index: 10;
-  display: flex;
-  flex-direction: column;
-  max-height: min(320px, 45vh);
-  overflow-y: auto;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-md);
-  background: rgba(27, 26, 24, 0.98);
-  box-shadow: var(--shadow-card);
-}
-.output-line {
-  padding: 7px 11px;
-  border-bottom: 1px solid var(--border-faint);
-  color: var(--text-0);
-  font: 11.5px/1.45 var(--mono);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.output-line:last-child {
-  border-bottom: 0;
-}
-.output-line.stderr {
-  color: var(--red);
-}
-.output-line.status {
-  color: var(--text-2);
-  font-style: italic;
-}
-.output-empty {
   padding: 14px;
   color: var(--text-3);
   font: 11px var(--mono);

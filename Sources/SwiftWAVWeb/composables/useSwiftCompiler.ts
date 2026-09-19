@@ -1,9 +1,8 @@
 import { onBeforeUnmount, onMounted, ref } from "vue";
-import { outputFromResult, problemsFromResult } from "../utils/compiler-output";
 import SwiftWorker from "../workers/swift.worker.ts?worker";
 
-import type { OutputLine, Problem, WorkspaceSnapshot, Diagnostic } from "../types";
-import type { ResultTypeFor, WorkerRequest, WorkerResponse } from "../workers/swift.worker";
+import type { WorkspaceSnapshot } from "../types";
+import type { ResultTypeFor, WorkerRequest, WorkerResponse, Diagnostic } from "../workers/swift.worker";
 
 export function useSwiftCompiler() {
   const worker = new SwiftWorker();
@@ -12,8 +11,6 @@ export function useSwiftCompiler() {
   const status = ref("Downloading Swift toolchain…");
   const toolchainReady = ref(false);
   const running = ref(false);
-  const problems = ref<Problem[]>([]);
-  const output = ref<OutputLine[]>([]);
   const diagnostics = ref<Diagnostic[]>([]);
   const loadingProgress = ref(0);
   let nextRequestId = 0;
@@ -71,13 +68,14 @@ export function useSwiftCompiler() {
     } catch (error) {
       toolchainReady.value = false;
       status.value = "Toolchain download failed";
-      problems.value = [
+      diagnostics.value = [
         {
           severity: "error",
-          file: "Toolchain",
+          file: null,
           line: null,
           column: null,
-          message: `Failed to download Swift toolchain: ${errorMessage(error)}`,
+          label: "Failed to download Swift toolchain",
+          message: errorMessage(error),
         },
       ];
       runDisabled.value = false;
@@ -93,27 +91,23 @@ export function useSwiftCompiler() {
 
     running.value = true;
     runDisabled.value = true;
-    problems.value = [];
-    output.value = [];
+    diagnostics.value = [];
     status.value = "Compiling...";
 
     try {
       const result = await request("compile", { files: workspace.files, primaryFile: workspace.primaryFile });
-
-      problems.value = problemsFromResult(result);
-      output.value = outputFromResult(result);
-      // status.value = result.ok ? "Ready" : `Failed (${result.stage ?? "unknown"})`;
+      diagnostics.value = result.diagnostics ?? [];
     } catch (error) {
-      problems.value = [
+      diagnostics.value = [
         {
           severity: "error",
-          file: "Swift",
+          file: null,
           line: null,
           column: null,
-          message: errorMessage(error),
+          label: errorMessage(error),
+          message: null,
         },
       ];
-      output.value = [{ text: "The compiler worker stopped unexpectedly.", kind: "status" }];
       status.value = "Compiler worker failed";
     } finally {
       running.value = false;
@@ -127,8 +121,8 @@ export function useSwiftCompiler() {
     return result.items ?? [];
   }
 
-  function clearProblems() {
-    problems.value = [];
+  function clearDiagnostics() {
+    diagnostics.value = [];
   }
 
   onMounted(() => preload());
@@ -141,12 +135,10 @@ export function useSwiftCompiler() {
     loadingProgress,
     toolchainReady,
     running,
-    problems,
-    output,
     diagnostics,
     run,
-    complete: autocomplete,
-    clearProblems,
+    autocomplete,
+    clearDiagnostics,
   };
 }
 
