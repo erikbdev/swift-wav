@@ -34,10 +34,7 @@ export function useWorkspace() {
   function persist() {
     try {
       if (typeof localStorage !== "undefined") {
-        localStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify({ files: { ...files }, active: activeFile.value }),
-        );
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ files: { ...files }, active: activeFile.value }));
       }
     } catch {
       // Storage can be full or unavailable; the current session still works.
@@ -90,11 +87,7 @@ export function useWorkspace() {
         if (parsed && parsed.files && Object.keys(parsed.files).length > 0) {
           // Only strings are valid CodeMirror documents. Older saved
           // workspaces can contain stale/non-string values.
-          const files: Record<string, string> = Object.fromEntries(
-            Object.entries(parsed.files as Record<string, unknown>).filter(
-              (entry): entry is [string, string] => typeof entry[1] === "string",
-            ),
-          );
+          const files: Record<string, string> = Object.fromEntries(Object.entries(parsed.files as Record<string, unknown>).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
           const names = Object.keys(files);
           if (names.length > 0) {
             return {
@@ -106,9 +99,7 @@ export function useWorkspace() {
       }
     } catch (e) {
       // Ignore corrupt storage and fall through to the default workspace.
-      console.error(
-        `An unknown error occurred when trying to load workspace. Loading default workspace: ${e}`,
-      );
+      console.error(`An unknown error occurred when trying to load workspace. Loading default workspace: ${e}`);
     }
 
     return defaultWorkspace();

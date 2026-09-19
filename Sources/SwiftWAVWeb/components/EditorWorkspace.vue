@@ -53,7 +53,7 @@ function submitCreate() {
   const name = newFileName.value;
   if (!name.trim()) {
     cancelCreate();
-  };
+  }
   emit("create-file", name);
   cancelCreate();
 }
@@ -97,16 +97,10 @@ watch(
 
 const problemsOpen = ref(false);
 const outputOpen = ref(false);
-const errorCount = computed(
-  () => problemList.value.filter((problem) => problem.severity === "error").length,
-);
-const warningCount = computed(
-  () => problemList.value.filter((problem) => problem.severity === "warning").length,
-);
+const errorCount = computed(() => problemList.value.filter((problem) => problem.severity === "error").length);
+const warningCount = computed(() => problemList.value.filter((problem) => problem.severity === "warning").length);
 const problemsStatus = computed(() =>
-  problemList.value.length
-    ? `${errorCount.value} error${errorCount.value === 1 ? "" : "s"}, ${warningCount.value} warning${warningCount.value === 1 ? "" : "s"}`
-    : "No issues",
+  problemList.value.length ? `${errorCount.value} error${errorCount.value === 1 ? "" : "s"}, ${warningCount.value} warning${warningCount.value === 1 ? "" : "s"}` : "No issues",
 );
 
 // A failed compile should surface its diagnostics immediately, while an
@@ -145,26 +139,9 @@ async function revealProblem(problem: Problem) {
 <template>
   <div class="editor-container">
     <div class="tabbar" role="tablist" aria-label="Swift files">
-      <button
-        v-for="name in fileNames"
-        :key="name"
-        role="tab"
-        type="button"
-        class="tab"
-        :class="{ active: name === currentFile }"
-        :aria-selected="name === currentFile"
-        @click="selectFile(name)"
-      >
+      <button v-for="name in fileNames" :key="name" role="tab" type="button" class="tab" :class="{ active: name === currentFile }" :aria-selected="name === currentFile" @click="selectFile(name)">
         <span>{{ name }}</span>
-        <span
-          class="tab-close"
-          role="button"
-          tabindex="-1"
-          title="Delete file"
-          @click.stop="deleteFile(name)"
-        >
-          ×
-        </span>
+        <span class="tab-close" role="button" tabindex="-1" title="Delete file" @click.stop="deleteFile(name)"> × </span>
       </button>
 
       <div v-if="isCreating" class="new-tab">
@@ -180,37 +157,18 @@ async function revealProblem(problem: Problem) {
         />
       </div>
 
-      <button
-        type="button"
-        class="tab tab-add"
-        title="New Swift file"
-        @click="openCreateInput"
-      >
-        +
-      </button>
+      <button type="button" class="tab tab-add" title="New Swift file" @click="openCreateInput">+</button>
     </div>
 
     <div ref="editorHost" class="cm-host"></div>
 
     <div class="problems-bar">
-      <button
-        class="problems-toggle"
-        :class="{ 'has-errors': errorCount, 'has-warnings': !errorCount && warningCount }"
-        type="button"
-        :aria-expanded="problemsOpen"
-        @click="toggleProblems"
-      >
+      <button class="problems-toggle" :class="{ 'has-errors': errorCount, 'has-warnings': !errorCount && warningCount }" type="button" :aria-expanded="problemsOpen" @click="toggleProblems">
         <span class="problems-icon">{{ errorCount || warningCount ? "!" : "✓" }}</span>
         <span>Problems</span>
         <span class="problems-count">{{ problemList.length }}</span>
       </button>
-      <button
-        class="output-toggle"
-        :class="{ 'has-output': outputLines.length }"
-        type="button"
-        :aria-expanded="outputOpen"
-        @click="toggleOutput"
-      >
+      <button class="output-toggle" :class="{ 'has-output': outputLines.length }" type="button" :aria-expanded="outputOpen" @click="toggleOutput">
         <span class="output-icon">{{ outputLines.length ? "•" : "›" }}</span>
         <span>Output</span>
         <span class="output-count">{{ outputLines.length }}</span>
@@ -234,14 +192,8 @@ async function revealProblem(problem: Problem) {
     </div>
 
     <div class="output-panel" :class="{ 'is-hidden': !outputOpen }">
-      <div v-if="!outputLines.length" class="output-empty">
-        Run the active Swift file to see its output.
-      </div>
-      <div
-        v-for="(line, index) in outputLines"
-        :key="`${index}:${line.text}`"
-        :class="['output-line', line.kind || 'stdout']"
-      >
+      <div v-if="!outputLines.length" class="output-empty">Run the active Swift file to see its output.</div>
+      <div v-for="(line, index) in outputLines" :key="`${index}:${line.text}`" :class="['output-line', line.kind || 'stdout']">
         {{ line.text }}
       </div>
     </div>

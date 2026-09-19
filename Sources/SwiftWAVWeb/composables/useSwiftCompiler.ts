@@ -32,11 +32,7 @@ export function useSwiftCompiler() {
         const message = event.data;
         if (message.id !== id) return;
 
-        if (
-          message.type === "progress" ||
-          message.type === "download-progress" ||
-          message.type === "preload-progress"
-        ) {
+        if (message.type === "progress" || message.type === "download-progress" || message.type === "preload-progress") {
           onProgress?.(message);
           return;
         }
@@ -67,9 +63,7 @@ export function useSwiftCompiler() {
 
   function handleDownloadProgress(progress: DownloadProgress) {
     if (progress.total > 0) {
-      setDownloadStatus(
-        `Downloading runtime… ${formatMB(progress.loaded)}/${formatMB(progress.total)}MB`,
-      );
+      setDownloadStatus(`Downloading runtime… ${formatMB(progress.loaded)}/${formatMB(progress.total)}MB`);
     } else {
       setDownloadStatus("Downloading runtime…");
     }
@@ -121,14 +115,10 @@ export function useSwiftCompiler() {
     status.value = "Compiling...";
 
     try {
-      const result = await request(
-        "compile",
-        { files: workspace.files, primaryFile: workspace.primaryFile },
-        (message) => {
-          if (message.type === "progress") status.value = message.message;
-          if (message.type === "download-progress") handleDownloadProgress(message);
-        },
-      );
+      const result = await request("compile", { files: workspace.files, primaryFile: workspace.primaryFile }, (message) => {
+        if (message.type === "progress") status.value = message.message;
+        if (message.type === "download-progress") handleDownloadProgress(message);
+      });
 
       problems.value = problemsFromResult(result);
       output.value = outputFromResult(result);
@@ -154,14 +144,10 @@ export function useSwiftCompiler() {
 
   async function autocomplete(workspace: WorkspaceSnapshot, offset: number) {
     if (!workspace.primaryFile) return [];
-    const result = await request(
-      "complete",
-      { files: workspace.files, primaryFile: workspace.primaryFile, offset },
-      (message) => {
-        if (message.type === "progress") status.value = message.message;
-        if (message.type === "download-progress") handleDownloadProgress(message);
-      },
-    );
+    const result = await request("complete", { files: workspace.files, primaryFile: workspace.primaryFile, offset }, (message) => {
+      if (message.type === "progress") status.value = message.message;
+      if (message.type === "download-progress") handleDownloadProgress(message);
+    });
     return result.items ?? [];
   }
 

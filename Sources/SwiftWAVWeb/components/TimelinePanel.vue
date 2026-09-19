@@ -222,26 +222,14 @@
 .track-lane {
   position: relative;
   min-width: 520px;
-  background-image: repeating-linear-gradient(
-    to right,
-    transparent 0,
-    transparent calc(12.5% - 1px),
-    var(--border-faint) calc(12.5% - 1px),
-    var(--border-faint) 12.5%
-  );
+  background-image: repeating-linear-gradient(to right, transparent 0, transparent calc(12.5% - 1px), var(--border-faint) calc(12.5% - 1px), var(--border-faint) 12.5%);
 }
 .track-lane::after {
   content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: repeating-linear-gradient(
-    to right,
-    transparent 0,
-    transparent calc(3.125% - 1px),
-    rgba(255, 244, 230, 0.025) calc(3.125% - 1px),
-    rgba(255, 244, 230, 0.025) 3.125%
-  );
+  background: repeating-linear-gradient(to right, transparent 0, transparent calc(3.125% - 1px), rgba(255, 244, 230, 0.025) calc(3.125% - 1px), rgba(255, 244, 230, 0.025) 3.125%);
 }
 .clip {
   position: absolute;

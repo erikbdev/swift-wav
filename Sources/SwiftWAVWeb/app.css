@@ -6,17 +6,17 @@
   --bg-3: #22211e;
   --bg-4: #2a2926;
   --bg-5: #343330;
-  --border: rgba(255, 244, 230, .08);
-  --border-strong: rgba(255, 244, 230, .16);
-  --border-faint: rgba(255, 244, 230, .05);
+  --border: rgba(255, 244, 230, 0.08);
+  --border-strong: rgba(255, 244, 230, 0.16);
+  --border-faint: rgba(255, 244, 230, 0.05);
   --text-0: #edece7;
   --text-1: #a6a29a;
   --text-2: #85817a;
   --text-3: #5f5c55;
   --accent: #ff6b45;
   --accent-hi: #ff855f;
-  --accent-dim: rgba(255, 107, 69, .14);
-  --accent-line: rgba(255, 107, 69, .38);
+  --accent-dim: rgba(255, 107, 69, 0.14);
+  --accent-line: rgba(255, 107, 69, 0.38);
   --green: #46c07e;
   --blue: #4aa3e8;
   --amber: #d6a04a;
@@ -30,8 +30,8 @@
   --topbar-h: 54px;
   --status-h: 30px;
   --tabbar-h: 40px;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3), 0 1px 1px rgba(0, 0, 0, .18);
-  --shadow-card: 0 6px 22px -8px rgba(0, 0, 0, .45), 0 2px 8px -3px rgba(0, 0, 0, .28);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 1px rgba(0, 0, 0, 0.18);
+  --shadow-card: 0 6px 22px -8px rgba(0, 0, 0, 0.45), 0 2px 8px -3px rgba(0, 0, 0, 0.28);
 }
 
 @font-face {
@@ -43,9 +43,12 @@
   src: url("/fonts/CommitMono.woff2") format("woff2");
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
-html, body {
+html,
+body {
   margin: 0;
   height: 100%;
   background: var(--bg-0);
@@ -55,4 +58,3 @@ html, body {
   letter-spacing: -0.006em;
   -webkit-font-smoothing: antialiased;
 }
-

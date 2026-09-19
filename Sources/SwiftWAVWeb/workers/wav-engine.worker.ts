@@ -12,20 +12,20 @@
 type WorkerMessage = Record<string, any>;
 
 function post(message: WorkerMessage): void {
-	self.postMessage(message);
+  self.postMessage(message);
 }
 
 self.onmessage = (event: MessageEvent<WorkerMessage>) => {
-	const message = event.data ?? {};
+  const message = event.data ?? {};
 
-	if (message.type === "ping") {
-		post({ id: message.id, type: "pong" });
-		return;
-	}
+  if (message.type === "ping") {
+    post({ id: message.id, type: "pong" });
+    return;
+  }
 
-	post({
-		id: message.id,
-		type: "error",
-		error: `Unsupported WAV engine message: ${String(message.type ?? "unknown")}`,
-	});
+  post({
+    id: message.id,
+    type: "error",
+    error: `Unsupported WAV engine message: ${String(message.type ?? "unknown")}`,
+  });
 };
