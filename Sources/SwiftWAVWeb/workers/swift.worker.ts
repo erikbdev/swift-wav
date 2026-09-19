@@ -124,9 +124,9 @@ async function fetchWithProgress(url: string, contentType?: string): Promise<Res
 
 // ---------- Toolchain artifacts: fetched + compiled once, then shared ----------
 
-const frontendModule = memoize(() => WebAssembly.compileStreaming(fetchWithProgress(`${TOOLCHAIN_BASE}/swift-frontend.wasm`)));
-const linkerModule = memoize(() => WebAssembly.compileStreaming(fetchWithProgress(`${TOOLCHAIN_BASE}/wasm-ld.wasm`)));
-const ideTestModule = memoize(() => WebAssembly.compileStreaming(fetchWithProgress(`${TOOLCHAIN_BASE}/swift-ide-test.wasm`)));
+const frontendModule = memoize(() => WebAssembly.compileStreaming(fetchWithProgress(`${TOOLCHAIN_BASE}/swift-frontend.wasm`, "application/wasm")));
+const linkerModule = memoize(() => WebAssembly.compileStreaming(fetchWithProgress(`${TOOLCHAIN_BASE}/wasm-ld.wasm`, "application/wasm")));
+const ideTestModule = memoize(() => WebAssembly.compileStreaming(fetchWithProgress(`${TOOLCHAIN_BASE}/swift-ide-test.wasm`, "application/wasm")));
 const sysrootModule = memoize(() =>
   fetchWithProgress(`${TOOLCHAIN_BASE}/swift-sysroot-core.tar`)
     .then((r) => r.arrayBuffer())
