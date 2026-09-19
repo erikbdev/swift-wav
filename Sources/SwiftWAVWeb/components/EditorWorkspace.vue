@@ -511,7 +511,7 @@ async function revealProblem(problem: Problem) {
   white-space: nowrap;
 }
 .problem-message {
-  overflow: hidden;
+  overflow-x: hidden;
   color: var(--text-0);
   font-size: 11.5px;
   text-overflow: ellipsis;

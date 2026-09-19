@@ -56,7 +56,7 @@ export function problemsFromResult(data: CompilerResult): Problem[] {
     }
   }
 
-  if (!parsed.length && !data.ok) {
+  if (!parsed.length) {
     parsed.push({
       severity: "error",
       file: "Swift",
@@ -82,7 +82,7 @@ export function outputFromResult(data: CompilerResult): OutputLine[] {
   appendLines(data.stderr, "stderr");
   if (!lines.length) {
     lines.push({
-      text: data.ok ? "Program produced no output." : `Run failed at ${data.stage ?? "an unknown stage"}.`,
+      text: data.exitCode === 0 ? "Program produced no output." : `Run failed at ${data.stage ?? "an unknown stage"}.`,
       kind: "status",
     });
   }

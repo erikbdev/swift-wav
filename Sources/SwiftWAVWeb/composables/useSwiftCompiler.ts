@@ -5,40 +5,34 @@ import SwiftWorker from "../workers/swift.worker.ts?worker";
 import type { OutputLine, Problem, WorkspaceSnapshot } from "../types";
 import type { ResultTypeFor, WorkerRequest, WorkerResponse } from "../workers/swift.worker";
 
-interface DownloadProgress {
-  loaded: number;
-  total: number;
-}
-
 export function useSwiftCompiler() {
   const worker = new SwiftWorker();
-  const runLabel = ref("Downloading runtime…");
-  const status = ref("Downloading Swift toolchain…");
+  const runLabel = ref("Play");
   const runDisabled = ref(true);
+  const status = ref("Downloading Swift toolchain…");
   const toolchainReady = ref(false);
   const running = ref(false);
   const problems = ref<Problem[]>([]);
   const output = ref<OutputLine[]>([]);
   let nextRequestId = 0;
 
-  function request<T extends WorkerRequest["type"]>(
-    type: T,
-    payload: Omit<Extract<WorkerRequest, { type: T }>, "id" | "type">,
-    onProgress?: (message: WorkerResponse) => void,
-  ): Promise<Extract<WorkerResponse, { type: ResultTypeFor<T> }>> {
+  function request<T extends WorkerRequest["type"]>(type: T, payload: Omit<Extract<WorkerRequest, { type: T }>, "id" | "type">): Promise<Extract<WorkerResponse, { type: ResultTypeFor<T> }>> {
     const id = ++nextRequestId;
     return new Promise((resolve, reject) => {
       const onMessage = (event: MessageEvent<WorkerResponse>) => {
         const message = event.data;
-        if (message.id !== id) return;
+        if (message.id !== id && message.id !== -1) return;
 
-        if (message.type === "progress" || message.type === "download-progress" || message.type === "preload-progress") {
-          onProgress?.(message);
-          return;
+        if (message.type === "preload" && message.id === -1) {
+          if (message.progress && message.progress > 0) {
+            status.value = `Downloading runtime… ${message.progress * 100}%`;
+          } else {
+            status.value = "Downloading runtime…";
+          }
+        } else {
+          cleanup();
+          resolve(message as Extract<WorkerResponse, { type: ResultTypeFor<T> }>);
         }
-
-        cleanup();
-        resolve(message as Extract<WorkerResponse, { type: ResultTypeFor<T> }>);
       };
 
       const onError = (event: ErrorEvent) => {
@@ -57,35 +51,18 @@ export function useSwiftCompiler() {
     });
   }
 
-  function setDownloadStatus(text: string) {
-    runLabel.value = text;
-  }
-
-  function handleDownloadProgress(progress: DownloadProgress) {
-    if (progress.total > 0) {
-      setDownloadStatus(`Downloading runtime… ${formatMB(progress.loaded)}/${formatMB(progress.total)}MB`);
-    } else {
-      setDownloadStatus("Downloading runtime…");
-    }
-  }
-
   async function preload() {
     runDisabled.value = true;
-    setDownloadStatus("Downloading runtime...");
     status.value = "Downloading Swift toolchain...";
 
     try {
-      const result = await request("preload", {}, (message) => {
-        if (message.type === "preload-progress") handleDownloadProgress(message);
-      });
-      if (!result.ok) throw new Error(result.error || "toolchain download failed");
+      const result = await request("preload", {});
+      if (result.error) throw result.error;
       toolchainReady.value = true;
-      runLabel.value = "Run";
       status.value = "Ready";
       runDisabled.value = false;
     } catch (error) {
       toolchainReady.value = false;
-      runLabel.value = "Run (retry download)";
       status.value = "Toolchain download failed";
       problems.value = [
         {
@@ -105,7 +82,6 @@ export function useSwiftCompiler() {
 
     if (!toolchainReady.value) {
       await preload();
-      if (!toolchainReady.value) return;
     }
 
     running.value = true;
@@ -115,14 +91,11 @@ export function useSwiftCompiler() {
     status.value = "Compiling...";
 
     try {
-      const result = await request("compile", { files: workspace.files, primaryFile: workspace.primaryFile }, (message) => {
-        if (message.type === "progress") status.value = message.message;
-        if (message.type === "download-progress") handleDownloadProgress(message);
-      });
+      const result = await request("compile", { files: workspace.files, primaryFile: workspace.primaryFile });
 
       problems.value = problemsFromResult(result);
       output.value = outputFromResult(result);
-      status.value = result.ok ? "Ready" : `Failed (${result.stage ?? "unknown"})`;
+      // status.value = result.ok ? "Ready" : `Failed (${result.stage ?? "unknown"})`;
     } catch (error) {
       problems.value = [
         {
@@ -138,16 +111,12 @@ export function useSwiftCompiler() {
     } finally {
       running.value = false;
       runDisabled.value = false;
-      runLabel.value = "Run";
     }
   }
 
   async function autocomplete(workspace: WorkspaceSnapshot, offset: number) {
     if (!workspace.primaryFile) return [];
-    const result = await request("complete", { files: workspace.files, primaryFile: workspace.primaryFile, offset }, (message) => {
-      if (message.type === "progress") status.value = message.message;
-      if (message.type === "download-progress") handleDownloadProgress(message);
-    });
+    const result = await request("complete", { files: workspace.files, primaryFile: workspace.primaryFile, offset });
     return result.items ?? [];
   }
 

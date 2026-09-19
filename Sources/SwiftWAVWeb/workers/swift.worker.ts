@@ -15,24 +15,17 @@
 import { Directory, File, PreopenDirectory } from "@bjorn3/browser_wasi_shim";
 import { untar } from "./tar";
 import { runWasiCommand } from "./wasi-run";
-
-// ---------- Wire protocol ----------
-//
-// This worker is the source of truth for every shape that crosses the
-// postMessage boundary. useSwiftCompiler.ts imports these as `import type`,
-// which isolatedModules guarantees TypeScript erases entirely, so none of
-// the worker's runtime code (or its @bjorn3/browser_wasi_shim dependency)
-// ends up in the main bundle just because it imports these types.
+import { memoize } from "../utils/memoize";
 
 export type SourceFiles = Record<string, string>;
 
 export type CompilerResult = {
-  ok: boolean;
   stage?: string;
   diagnostics?: string[];
   stdout?: string[];
   stderr?: string[];
   exitCode?: number;
+  error?: unknown;
 };
 
 export type CompletionItem = {
@@ -47,22 +40,18 @@ export type WorkerRequest =
   | { id: number; type: "complete"; files: SourceFiles; primaryFile: string; offset: number };
 
 export type WorkerResponse =
-  | { id: number; type: "preload-progress"; loaded: number; total: number }
-  | { id: number; type: "preload-done"; ok: boolean; error?: string }
-  | { id: number; type: "progress"; message: string }
-  | { id: number; type: "download-progress"; loaded: number; total: number }
-  | ({ id: number; type: "result" } & CompilerResult)
+  | { id: number; type: "preload"; progress?: number; error?: unknown }
+  | ({ id: number; type: "compile" } & CompilerResult)
   | {
       id: number;
-      type: "completion-result";
-      ok: boolean;
-      items: CompletionItem[];
+      type: "complete";
+      items?: CompletionItem[];
       diagnostics?: string[];
-      error?: string;
+      error?: unknown;
     };
 
 /** The terminal response `type` a given request `type` resolves with. */
-export type ResultTypeFor<T extends WorkerRequest["type"]> = T extends "preload" ? "preload-done" : T extends "compile" ? "result" : "completion-result";
+export type ResultTypeFor<T extends WorkerRequest["type"]> = T extends "preload" ? "preload" : T extends "compile" ? "compile" : "complete";
 
 interface CompletionResult {
   items: CompletionItem[];
@@ -76,11 +65,11 @@ interface SwiftCompiler {
 
 const TOOLCHAIN_BASE = "/toolchain";
 
-const post = (msg: WorkerResponse) => self.postMessage(msg);
+function post(message: WorkerResponse): void {
+  self.postMessage(message);
+}
 
 // ---------- Fetching toolchain assets ----------
-
-type ProgressCallback = (loaded: number, total: number) => void;
 
 const downloadProgress = new Map<string, { loaded: number; total: number }>();
 
@@ -96,14 +85,13 @@ const downloadProgress = new Map<string, { loaded: number; total: number }>();
  */
 async function fetchWithProgress(url: string, contentType?: string): Promise<Response> {
   const reportProgress = () => {
-    // if (!onProgress) return;
     let loaded = 0;
     let total = 0;
     for (const entry of downloadProgress.values()) {
       loaded += entry.loaded;
       total += entry.total;
     }
-    // onProgress(loaded, total);
+    post({ id: -1, type: "preload", progress: loaded / total });
   };
 
   downloadProgress.set(url, { loaded: 0, total: 0 });
@@ -134,23 +122,16 @@ async function fetchWithProgress(url: string, contentType?: string): Promise<Res
   return new Response(trackedStream, contentType ? { headers: { "Content-Type": contentType } } : undefined);
 }
 
-// function moduleLoader(url: string): () => Promise<WebAssembly.Module> {
-//   return memoize(async () => {
-//     const res = await fetchWithProgress(url);
-//     return WebAssembly.compileStreaming(res);
-//   }).value;
-// }
-
 // ---------- Toolchain artifacts: fetched + compiled once, then shared ----------
 
-const frontendModule = memoize(() => WebAssembly.compileStreaming(fetchWithProgress(`${TOOLCHAIN_BASE}/swift-frontend.wasm`))).value;
-const linkerModule = memoize(() => WebAssembly.compileStreaming(fetchWithProgress(`${TOOLCHAIN_BASE}/wasm-ld.wasm`))).value;
-const ideTestModule = memoize(() => WebAssembly.compileStreaming(fetchWithProgress(`${TOOLCHAIN_BASE}/swift-ide-test.wasm`))).value;
+const frontendModule = memoize(() => WebAssembly.compileStreaming(fetchWithProgress(`${TOOLCHAIN_BASE}/swift-frontend.wasm`)));
+const linkerModule = memoize(() => WebAssembly.compileStreaming(fetchWithProgress(`${TOOLCHAIN_BASE}/wasm-ld.wasm`)));
+const ideTestModule = memoize(() => WebAssembly.compileStreaming(fetchWithProgress(`${TOOLCHAIN_BASE}/swift-ide-test.wasm`)));
 const sysrootModule = memoize(() =>
   fetchWithProgress(`${TOOLCHAIN_BASE}/swift-sysroot-core.tar`)
     .then((r) => r.arrayBuffer())
     .then(untar),
-).value;
+);
 
 /** Common `-frontend`-family flags shared by swift-frontend and swift-ide-test. */
 function commonFrontendArgs(): string[] {
@@ -182,7 +163,7 @@ type Layout = { diskFiles: Map<string, string>; entryName: string } | { error: s
  * Maps a workspace's `files` onto the on-disk names swift-frontend and
  * swift-ide-test will see, choosing which one is the module's entry point.
  *
- * Swift only allows top-level statements (a bare `print(...)`, etc.) in a
+ * Swift only allows top-level statements (a bare `print(...)`, etc.) in
  * module made of more than one file when the file holding them is literally
  * named `main.swift`; a single-file module has no such restriction. Rather
  * than requiring every workspace to have a tab named exactly that, the
@@ -297,8 +278,8 @@ function parseCompletionResults(stdoutLines: string[]): CompletionItem[] {
  * multi-second module-cache warmup again, which is the right price for not
  * answering every request after it out of a poisoned cache.
  */
-const { value: boot, discard } = memoize(async (): Promise<SwiftCompiler> => {
-  const [frontend, linker, sysroot] = await Promise.all([frontendModule, linkerModule, sysrootModule]);
+const swiftCompiler = memoize(async (): Promise<SwiftCompiler> => {
+  const [frontend, linker, sysroot] = await Promise.all([frontendModule(), linkerModule(), sysrootModule()]);
 
   /**
    * The Clang module cache (SwiftShims, wasi-libc's own modules) that
@@ -313,7 +294,7 @@ const { value: boot, discard } = memoize(async (): Promise<SwiftCompiler> => {
   const sysrootPreopen = () => new PreopenDirectory("/sysroot", sysroot.contents);
   const moduleCachePreopen = () => new PreopenDirectory("/module-cache", moduleCache.contents);
 
-  const compiler: SwiftCompiler = {
+  return {
     // Compiles every file in the workspace as one module (whole-module
     // optimization is implicit whenever swift-frontend is given more than
     // one input and no `-primary-file`) and runs the result.
@@ -413,9 +394,10 @@ const { value: boot, discard } = memoize(async (): Promise<SwiftCompiler> => {
         if (linkResult.exitCode !== 0 || !(programFile instanceof File)) {
           return {
             stage: "link",
-            ok: false,
+            exitCode: linkResult.exitCode,
             diagnostics: linkResult.stderr,
             stdout: linkResult.stdout,
+            stderr: linkResult.stderr,
           };
         }
 
@@ -426,14 +408,13 @@ const { value: boot, discard } = memoize(async (): Promise<SwiftCompiler> => {
 
         return {
           stage: "run",
-          ok: runResult.exitCode === 0,
           exitCode: runResult.exitCode,
           stdout: runResult.stdout,
           stderr: runResult.stderr,
           diagnostics: [...frontendResult.stderr, ...linkResult.stderr],
         };
       } catch (e) {
-        discard();
+        swiftCompiler.discard();
         throw e;
       }
     },
@@ -444,7 +425,7 @@ const { value: boot, discard } = memoize(async (): Promise<SwiftCompiler> => {
     // module, and returns the parsed completion list.
     complete: async (files, primaryFile, offset, log, onIdeTestProgress) => {
       try {
-        const ideTest = await ideTestModule;
+        const ideTest = await ideTestModule();
 
         const layout = layoutInputs(files, primaryFile);
         if ("error" in layout) {
@@ -478,82 +459,60 @@ const { value: boot, discard } = memoize(async (): Promise<SwiftCompiler> => {
           ...commonFrontendArgs(),
         ];
 
-        const result = await runWasiCommand(ideTestModule, argv, [sysrootPreopen(), moduleCachePreopen(), buildPreopen()]);
+        const result = await runWasiCommand(ideTest, argv, [sysrootPreopen(), moduleCachePreopen(), buildPreopen()]);
         return { items: parseCompletionResults(result.stdout), diagnostics: result.stderr };
       } catch (e) {
-        discard();
+        swiftCompiler.discard();
         throw e;
       }
     },
-  };
-  return compiler;
+  } satisfies SwiftCompiler;
 });
-
-// ---------- Request dispatch ----------
 
 self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
   const msg = event.data;
 
-  /** `err.message`, or `err.stack` for the extra detail internal-error diagnostics want. */
-  function errorDetail(err: unknown, field: "message" | "stack" = "message"): string {
-    if (err instanceof Error) return (field === "stack" ? err.stack : err.message) ?? String(err);
-    return String(err);
-  }
-
-  /** The progress channels every request type reports through, scoped to this request's `id`. */
-  function progressReporter() {
-    return {
-      log: (message: string) => post({ id: msg.id, type: "progress", message }),
-      onProgress: (loaded: number, total: number) => post({ id: msg.id, type: "download-progress", loaded, total }),
-    };
-  }
-
   switch (msg.type) {
     case "preload": {
-      const onProgress = (loaded: number, total: number) => post({ id: msg.id, type: "preload-progress", loaded, total });
       try {
-        await boot(onProgress);
-        post({ id: msg.id, type: "preload-done", ok: true });
-      } catch (err) {
-        post({ id: msg.id, type: "preload-done", ok: false, error: errorDetail(err) });
+        await swiftCompiler();
+        post({ id: msg.id, type: msg.type, progress: 1.0 });
+      } catch (e) {
+        post({ id: msg.id, type: msg.type, error: e });
       }
-      return;
+      break;
     }
 
     case "complete": {
-      const { log, onProgress } = progressReporter();
       try {
-        const compiler = await boot(onProgress);
-        const { items, diagnostics } = await compiler.complete(msg.files, msg.primaryFile, msg.offset, log, onProgress);
-        post({ id: msg.id, type: "completion-result", ok: true, items, diagnostics });
-      } catch (err) {
-        post({
-          id: msg.id,
-          type: "completion-result",
-          ok: false,
-          items: [],
-          error: errorDetail(err, "stack"),
-        });
+        const compiler = await swiftCompiler();
+        const { items, diagnostics } = await compiler.complete(
+          msg.files,
+          msg.primaryFile,
+          msg.offset,
+          () => {},
+          () => {},
+        );
+        post({ id: msg.id, type: msg.type, items, diagnostics });
+      } catch (e) {
+        post({ id: msg.id, type: msg.type, error: e });
       }
-      return;
+      break;
     }
 
     case "compile": {
-      const { log, onProgress } = progressReporter();
       try {
-        const compiler = await boot(onProgress);
-        const result = await compiler.compileAndRun(msg.files, msg.primaryFile, log);
-        post({ id: msg.id, type: "result", ...result });
-      } catch (err) {
+        const compiler = await swiftCompiler();
+        const result = await compiler.compileAndRun(msg.files, msg.primaryFile, () => {});
+        post({ id: msg.id, type: msg.type, ...result });
+      } catch (e) {
         post({
           id: msg.id,
-          type: "result",
-          ok: false,
-          stage: "internal",
-          diagnostics: [errorDetail(err, "stack")],
+          type: msg.type,
+          error: e,
         });
       }
-      return;
+      break;
     }
 
     default:
