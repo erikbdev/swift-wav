@@ -16,6 +16,3 @@ function memoize<T>(create: () => T): { value: T; discard(): void } {
     },
   };
 }
-
-const counter = memoize(() => 1);
-counter.value;

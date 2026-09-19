@@ -53,20 +53,20 @@ export type WorkerResponse =
   | { id: number; type: "download-progress"; loaded: number; total: number }
   | ({ id: number; type: "result" } & CompilerResult)
   | {
-      id: number;
-      type: "completion-result";
-      ok: boolean;
-      items: CompletionItem[];
-      diagnostics?: string[];
-      error?: string;
-    };
+    id: number;
+    type: "completion-result";
+    ok: boolean;
+    items: CompletionItem[];
+    diagnostics?: string[];
+    error?: string;
+  };
 
 /** The terminal response `type` a given request `type` resolves with. */
 export type ResultTypeFor<T extends WorkerRequest["type"]> = T extends "preload"
   ? "preload-done"
   : T extends "compile"
-    ? "result"
-    : "completion-result";
+  ? "result"
+  : "completion-result";
 
 interface CompletionResult {
   items: CompletionItem[];
@@ -110,18 +110,17 @@ const downloadProgress = new Map<string, { loaded: number; total: number }>();
  */
 async function fetchWithProgress(
   url: string,
-  onProgress?: ProgressCallback,
   contentType?: string,
 ): Promise<Response> {
   const reportProgress = () => {
-    if (!onProgress) return;
+    // if (!onProgress) return;
     let loaded = 0;
     let total = 0;
     for (const entry of downloadProgress.values()) {
       loaded += entry.loaded;
       total += entry.total;
     }
-    onProgress(loaded, total);
+    // onProgress(loaded, total);
   };
 
   downloadProgress.set(url, { loaded: 0, total: 0 });
@@ -157,29 +156,19 @@ async function fetchWithProgress(
   );
 }
 
-function moduleLoader(url: string): () => Promise<WebAssembly.Module> {
-  return memoize(async () => {
-    const res = await fetchWithProgress(url, onProgress());
-    return WebAssembly.compileStreaming(res);
-  }).value;
-}
+// function moduleLoader(url: string): () => Promise<WebAssembly.Module> {
+//   return memoize(async () => {
+//     const res = await fetchWithProgress(url);
+//     return WebAssembly.compileStreaming(res);
+//   }).value;
+// }
 
 // ---------- Toolchain artifacts: fetched + compiled once, then shared ----------
 
-const getFrontendModule = moduleLoader(`${TOOLCHAIN_BASE}/swift-frontend.wasm`);
-const getLinkerModule = moduleLoader(`${TOOLCHAIN_BASE}/wasm-ld.wasm`);
-
-// swift-ide-test drives the same completion machinery SourceKit exposes to
-// editors, as a standalone CLI. It's a separate ~150MB module from
-// swift-frontend, so it's fetched lazily on the first completion request
-// rather than as part of the Run preload.
-const getIdeTestModule = moduleLoader(`${TOOLCHAIN_BASE}/swift-ide-test.wasm`);
-
-const getSysroot = memoize(async (onProgress?: ProgressCallback) => {
-  const res = await fetchWithProgress(`${TOOLCHAIN_BASE}/swift-sysroot-core.tar`, onProgress);
-  const buf = await res.arrayBuffer();
-  return untar(buf);
-}).get;
+const frontendModule = memoize(() => WebAssembly.compileStreaming(fetchWithProgress(`${TOOLCHAIN_BASE}/swift-frontend.wasm`))).value;
+const linkerModule = memoize(() => WebAssembly.compileStreaming(fetchWithProgress(`${TOOLCHAIN_BASE}/wasm-ld.wasm`))).value;
+const ideTestModule = memoize(() => WebAssembly.compileStreaming(fetchWithProgress(`${TOOLCHAIN_BASE}/swift-ide-test.wasm`))).value;
+const sysrootModule = memoize(() => fetchWithProgress(`${TOOLCHAIN_BASE}/swift-sysroot-core.tar`).then(r => r.arrayBuffer()).then(untar)).value;
 
 /** Common `-frontend`-family flags shared by swift-frontend and swift-ide-test. */
 function commonFrontendArgs(): string[] {
@@ -334,12 +323,12 @@ function parseCompletionResults(stdoutLines: string[]): CompletionItem[] {
  * multi-second module-cache warmup again, which is the right price for not
  * answering every request after it out of a poisoned cache.
  */
-const { get: boot, discard } = memoize(
-  async (onProgress?: ProgressCallback): Promise<SwiftCompiler> => {
-    const [frontendModule, linkerModule, sysroot] = await Promise.all([
-      getFrontendModule(onProgress),
-      getLinkerModule(onProgress),
-      getSysroot(onProgress),
+const { value: boot, discard } = memoize(
+  async (): Promise<SwiftCompiler> => {
+    const [frontend, linker, sysroot] = await Promise.all([
+      frontendModule,
+      linkerModule,
+      sysrootModule,
     ]);
 
     /**
@@ -389,7 +378,7 @@ const { get: boot, discard } = memoize(
             "/build/main.o",
           ];
 
-          let frontendResult = await runWasiCommand(frontendModule, frontendArgv([]), [
+          let frontendResult = await runWasiCommand(frontend, frontendArgv([]), [
             sysrootPreopen(),
             moduleCachePreopen(),
             buildPreopen(),
@@ -412,7 +401,7 @@ const { get: boot, discard } = memoize(
           ) {
             build.contents.delete("main.o");
             frontendResult = await runWasiCommand(
-              frontendModule,
+              frontend,
               frontendArgv(["-parse-as-library"]),
               [sysrootPreopen(), moduleCachePreopen(), buildPreopen()],
             );
@@ -462,7 +451,7 @@ const { get: boot, discard } = memoize(
             "/build/program.wasm",
           ];
 
-          const linkResult = await runWasiCommand(linkerModule, linkerArgv, [
+          const linkResult = await runWasiCommand(linker, linkerArgv, [
             sysrootPreopen(),
             buildPreopen(),
           ]);
@@ -490,7 +479,7 @@ const { get: boot, discard } = memoize(
             diagnostics: [...frontendResult.stderr, ...linkResult.stderr],
           };
         } catch (e) {
-          discard(compiler);
+          discard();
           throw e;
         }
       },
@@ -501,7 +490,7 @@ const { get: boot, discard } = memoize(
       // module, and returns the parsed completion list.
       complete: async (files, primaryFile, offset, log, onIdeTestProgress) => {
         try {
-          const ideTestModule = await getIdeTestModule(onIdeTestProgress);
+          const ideTest = await ideTestModule;
 
           const layout = layoutInputs(files, primaryFile);
           if ("error" in layout) {
@@ -548,7 +537,7 @@ const { get: boot, discard } = memoize(
           ]);
           return { items: parseCompletionResults(result.stdout), diagnostics: result.stderr };
         } catch (e) {
-          discard(compiler);
+          discard();
           throw e;
         }
       },
