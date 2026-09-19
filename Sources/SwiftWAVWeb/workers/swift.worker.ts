@@ -30,8 +30,7 @@ export type Diagnostic = {
   line: number | null;
   column: number | null;
   severity: "error" | "warning" | "note";
-  label: string;
-  message: string | null;
+  message: string;
 };
 
 export type WorkerRequest =
@@ -257,8 +256,7 @@ const swiftCompiler = memoize(async () => {
                 line: null,
                 column: null,
                 severity: "error",
-                label: frontendResult.stderr.join("\n"),
-                message: null,
+                message: frontendResult.stderr.join("\n"),
               },
             ] satisfies Diagnostic[],
           };
@@ -310,8 +308,7 @@ const swiftCompiler = memoize(async () => {
                 line: null,
                 column: null,
                 severity: "error",
-                label: linkResult.stderr.join("\n"),
-                message: null,
+                message: linkResult.stderr.join("\n"),
               },
             ] satisfies Diagnostic[], // TODO: parse stderr
             // stdout: linkResult.stdout,

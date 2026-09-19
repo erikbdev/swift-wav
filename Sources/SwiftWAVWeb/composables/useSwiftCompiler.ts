@@ -74,8 +74,7 @@ export function useSwiftCompiler() {
           file: null,
           line: null,
           column: null,
-          label: "Failed to download Swift toolchain",
-          message: errorMessage(error),
+          message: `Failed to download Swift toolchain: \n\t ${errorMessage(error)}`,
         },
       ];
       runDisabled.value = false;
@@ -104,8 +103,7 @@ export function useSwiftCompiler() {
           file: null,
           line: null,
           column: null,
-          label: errorMessage(error),
-          message: null,
+          message: errorMessage(error),
         },
       ];
       status.value = "Compiler worker failed";

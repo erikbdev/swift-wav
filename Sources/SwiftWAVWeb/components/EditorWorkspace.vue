@@ -144,26 +144,26 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
 
     <div ref="editorHost" class="cm-host"></div>
 
-    <div class="problems-bar">
-      <button class="problems-toggle" :class="{ 'has-errors': errorCount, 'has-warnings': !errorCount && warningCount }" type="button" :aria-expanded="diagnosticsOpen" @click="toggleDiagnostics">
-        <span class="problems-icon">{{ errorCount || warningCount ? "!" : "✓" }}</span>
+    <div class="diagnostics-bar">
+      <button class="diagnostics-toggle" :class="{ 'has-errors': errorCount, 'has-warnings': !errorCount && warningCount }" type="button" :aria-expanded="diagnosticsOpen" @click="toggleDiagnostics">
+        <span class="diagnostics-icon">{{ errorCount || warningCount ? "!" : "✓" }}</span>
         <span>Diagnostics</span>
-        <span class="problems-count">{{ diagnosticList.length }}</span>
+        <span class="diagnostics-count">{{ diagnosticList.length }}</span>
       </button>
     </div>
 
-    <div class="problems-panel" :hidden="!diagnosticsOpen">
-      <div v-if="!diagnosticList.length" class="problems-empty">No diagnostics.</div>
+    <div class="diagnostics-panel" :hidden="!diagnosticsOpen">
+      <div v-if="!diagnosticList.length" class="diagnostics-empty">No diagnostics.</div>
       <button
         v-for="diagnostic in diagnosticList"
-        :key="`${diagnostic.severity}:${diagnostic.file}:${diagnostic.line}:${diagnostic.column}:${diagnostic.label}:${diagnostic.message}`"
+        :key="`${diagnostic.severity}:${diagnostic.file}:${diagnostic.line}:${diagnostic.column}:${diagnostic.message}`"
         type="button"
-        :class="['problem-item', diagnostic.severity]"
+        :class="['diagnostic-item', diagnostic.severity]"
         @click="revealDiagnostic(diagnostic)"
       >
-        <!-- <span class="problem-location">{{ [diagnostic.file, diagnostic.line, diagnostic.column].filter((s) => s !== null && s !== undefined).join(":") }}</span> -->
-        <!-- <span class="problem-severity">{{ diagnostic.severity }}</span> -->
-        <!-- <span class="problem-message">{{ diagnostic.message }}</span> -->
+        <span v-if="diagnostic.file" class="diagnostic-location">{{ [diagnostic.file, diagnostic.line, diagnostic.column].filter((s) => s !== null && s !== undefined).join(":") }}: </span>
+        <span class="diagnostic-severity">{{ diagnostic.severity }}: </span>
+        <pre class="diagnostic-message">{{ diagnostic.message }}</pre>
       </button>
     </div>
   </div>
@@ -317,9 +317,9 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
   font-family: var(--mono);
 }
 
-/* ---------- Problems ---------- */
+/* ---------- Diagnostics ---------- */
 
-.problems-bar {
+.diagnostics-bar {
   display: flex;
   align-items: center;
   min-height: 30px;
@@ -332,7 +332,7 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
   font-size: 10.5px;
   flex-shrink: 0;
 }
-.problems-toggle {
+.diagnostics-toggle {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -345,13 +345,13 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
   font: inherit;
   cursor: pointer;
 }
-.problems-toggle:hover,
-.problems-toggle[aria-expanded="true"] {
+.diagnostics-toggle:hover,
+.diagnostics-toggle[aria-expanded="true"] {
   background: var(--bg-3);
   border-color: var(--border);
   color: var(--text-0);
 }
-.problems-icon {
+.diagnostics-icon {
   display: inline-grid;
   place-items: center;
   width: 15px;
@@ -362,15 +362,15 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
   font-size: 10px;
   font-weight: 700;
 }
-.problems-toggle.has-errors .problems-icon {
+.diagnostics-toggle.has-errors .diagnostics-icon {
   background: var(--red);
   color: #fff;
 }
-.problems-toggle.has-warnings .problems-icon {
+.diagnostics-toggle.has-warnings .diagnostics-icon {
   background: var(--amber);
   color: var(--bg-0);
 }
-.problems-count {
+.diagnostics-count {
   min-width: 16px;
   padding: 1px 5px;
   border-radius: 10px;
@@ -378,11 +378,8 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
   color: var(--text-1);
   text-align: center;
 }
-.problems-status {
-  color: var(--text-3);
-}
 
-.problems-panel {
+.diagnostics-panel {
   position: absolute;
   right: 8px;
   bottom: 38px;
@@ -397,52 +394,58 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
   background: rgba(27, 26, 24, 0.98);
   box-shadow: var(--shadow-card);
 }
-/* .problem-item { */
-/*   display: grid; */
-/*   grid-template-columns: 9px minmax(100px, 175px) 1fr; */
-/*   align-items: center; */
-/*   gap: 9px; */
-/*   min-height: 38px; */
-/*   padding: 7px 11px; */
-/*   width: 100%; */
-/*   border: 0; */
-/*   border-bottom: 1px solid var(--border-faint); */
-/*   background: transparent; */
-/*   color: var(--text-1); */
-/*   cursor: pointer; */
-/*   font: inherit; */
-/*   text-align: left; */
-/* } */
-/* .problem-item:last-child { */
-/*   border-bottom: 0; */
-/* } */
-/* .problem-item:hover { */
-/*   background: var(--bg-3); */
-/* } */
-/* .problem-severity { */
-/*   width: 7px; */
-/*   height: 7px; */
-/*   border-radius: 50%; */
-/*   background: var(--amber); */
-/* } */
-/* .problem-item.error .problem-severity { */
-/*   background: var(--red); */
-/* } */
-/* .problem-location { */
-/*   overflow: hidden; */
-/*   color: var(--text-3); */
-/*   font: 10px var(--mono); */
-/*   text-overflow: ellipsis; */
-/*   white-space: nowrap; */
-/* } */
-/* .problem-message { */
-/*   overflow-x: hidden; */
-/*   color: var(--text-0); */
-/*   font-size: 11.5px; */
-/*   text-overflow: ellipsis; */
-/*   white-space: nowrap; */
-/* } */
-.problems-empty {
+.diagnostic-item {
+  display: inline;
+  flex-direction: column;
+  gap: 4px;
+  padding: 7px 11px;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--border-faint);
+  background: transparent;
+  color: var(--text-1);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  font: 11.5px var(--mono);
+}
+.diagnostic-item:last-child {
+  border-bottom: 0;
+}
+.diagnostic-item:hover {
+  background: var(--bg-3);
+}
+.diagnostic-meta {
+  display: flex;
+  gap: 8px;
+  overflow: hidden;
+}
+.diagnostic-location {
+  overflow: hidden;
+  color: var(--text-3);
+  font: 10px var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.diagnostic-severity {
+  flex-shrink: 0;
+  color: var(--amber);
+}
+.diagnostic-item.error .diagnostic-severity {
+  color: var(--red);
+}
+.diagnostic-item.note .diagnostic-severity {
+  color: var(--blue);
+}
+.diagnostic-message {
+  display: inline;
+  overflow-x: auto;
+  margin: 0;
+  color: var(--text-0);
+  font: 11.5px var(--mono);
+  white-space: pre;
+}
+.diagnostics-empty {
   padding: 14px;
   color: var(--text-3);
   font: 11px var(--mono);
