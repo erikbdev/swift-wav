@@ -1,8 +1,8 @@
 import { onBeforeUnmount, onMounted, ref } from "vue";
-import { formatMB, outputFromResult, problemsFromResult } from "../utils/compiler-output";
+import { outputFromResult, problemsFromResult } from "../utils/compiler-output";
 import SwiftWorker from "../workers/swift.worker.ts?worker";
 
-import type { OutputLine, Problem, WorkspaceSnapshot } from "../types";
+import type { OutputLine, Problem, WorkspaceSnapshot, Diagnostic } from "../types";
 import type { ResultTypeFor, WorkerRequest, WorkerResponse } from "../workers/swift.worker";
 
 export function useSwiftCompiler() {
@@ -14,6 +14,8 @@ export function useSwiftCompiler() {
   const running = ref(false);
   const problems = ref<Problem[]>([]);
   const output = ref<OutputLine[]>([]);
+  const diagnostics = ref<Diagnostic[]>([]);
+  const loadingProgress = ref(0);
   let nextRequestId = 0;
 
   function request<T extends WorkerRequest["type"]>(type: T, payload: Omit<Extract<WorkerRequest, { type: T }>, "id" | "type">): Promise<Extract<WorkerResponse, { type: ResultTypeFor<T> }>> {
@@ -23,7 +25,12 @@ export function useSwiftCompiler() {
         const message = event.data;
         if (message.id !== id && message.id !== -1) return;
 
+        if (message.type == "preload") {
+          loadingProgress.value = message.progress ?? 0;
+        }
+
         if (message.type === "preload" && message.id === -1) {
+          loadingProgress.value = message.progress ?? 0;
           if (message.progress && message.progress > 0) {
             status.value = `Downloading runtime… ${message.progress * 100}%`;
           } else {
@@ -131,10 +138,12 @@ export function useSwiftCompiler() {
     runLabel,
     status,
     runDisabled,
+    loadingProgress,
     toolchainReady,
     running,
     problems,
     output,
+    diagnostics,
     run,
     complete: autocomplete,
     clearProblems,

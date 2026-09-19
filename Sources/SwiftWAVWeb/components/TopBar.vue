@@ -34,6 +34,7 @@ function handleRun() {
 .topbar {
   display: flex;
   align-items: center;
+  height: var(--topbar-h);
   gap: 14px;
   padding: 0 14px;
   background: color-mix(in srgb, var(--bg-0) 86%, transparent);

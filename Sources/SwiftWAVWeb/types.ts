@@ -6,6 +6,15 @@ export type Problem = {
   message: string;
 };
 
+export type Diagnostic = {
+  file: string;
+  line: number;
+  position: number;
+  severity: string;
+  title: string;
+  snippet: string;
+};
+
 export type OutputLine = {
   text: string;
   kind: string;

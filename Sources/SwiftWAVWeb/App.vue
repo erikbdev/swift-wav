@@ -40,25 +40,35 @@ function runCurrentFile() {
         @update-file="handleFileUpdate"
         @delete-file="workspace.deleteFile"
       />
-      <TimelinePanel />
+
+      <br />
+
+      <div class="loading-toolchain" v-if="!compiler.toolchainReady.value">
+        <progress max="1" :value="compiler.loadingProgress.value"></progress>
+        <p>Preparing Swift compiler...</p>
+      </div>
+      <TimelinePanel v-else />
     </div>
 
-    <StatusBar :status="status" />
+    <!-- <StatusBar :status="status" /> -->
   </div>
 </template>
 
 <style scoped>
 .app {
   height: 100vh;
-  display: grid;
-  grid-template-rows: var(--topbar-h) 1fr var(--status-h);
   background: var(--bg-0);
   overflow: hidden;
 }
 .body {
   display: flex;
   min-height: 0;
+  height: calc(100% - var(--topbar-h));
   overflow: hidden;
+}
+
+.loading-toolchain {
+  width: 100%;
 }
 
 @media (max-width: 800px) {

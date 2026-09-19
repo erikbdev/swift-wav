@@ -58,3 +58,7 @@ body {
   letter-spacing: -0.006em;
   -webkit-font-smoothing: antialiased;
 }
+
+[hidden] {
+  display: none !important;
+}

@@ -176,7 +176,7 @@ async function revealProblem(problem: Problem) {
       <span class="problems-status">{{ problemsStatus }}</span>
     </div>
 
-    <div class="problems-panel" :class="{ 'is-hidden': !problemsOpen }">
+    <div class="problems-panel" :hidden="!problemsOpen">
       <div v-if="!problemList.length" class="problems-empty">No Swift problems detected.</div>
       <button
         v-for="problem in problemList"
@@ -191,7 +191,7 @@ async function revealProblem(problem: Problem) {
       </button>
     </div>
 
-    <div class="output-panel" :class="{ 'is-hidden': !outputOpen }">
+    <div class="output-panel" :hidden="!outputOpen">
       <div v-if="!outputLines.length" class="output-empty">Run the active Swift file to see its output.</div>
       <div v-for="(line, index) in outputLines" :key="`${index}:${line.text}`" :class="['output-line', line.kind || 'stdout']">
         {{ line.text }}
@@ -469,9 +469,6 @@ async function revealProblem(problem: Problem) {
   background: rgba(27, 26, 24, 0.98);
   box-shadow: var(--shadow-card);
 }
-.problems-panel.is-hidden {
-  display: none;
-}
 .problem-item {
   display: grid;
   grid-template-columns: 9px minmax(100px, 175px) 1fr;
@@ -536,9 +533,6 @@ async function revealProblem(problem: Problem) {
   border-radius: var(--r-md);
   background: rgba(27, 26, 24, 0.98);
   box-shadow: var(--shadow-card);
-}
-.output-panel.is-hidden {
-  display: none;
 }
 .output-line {
   padding: 7px 11px;
