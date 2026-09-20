@@ -116,6 +116,10 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
   await nextTick();
   editor.reveal(diagnostic);
 }
+
+// A pointer line underlines the span a diagnostic refers to with only
+// whitespace, "^", and "~" characters (e.g. "  ^~~~~~~~").
+const POINTER_ONLY = /^[\s^~]*[\^~][\s^~]*$/;
 </script>
 
 <template>
@@ -155,9 +159,10 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
         >
           <span v-if="diagnostic.file" class="diagnostic-location">{{ [diagnostic.file, diagnostic.line, diagnostic.column].filter((s) => s !== null && s !== undefined).join(":") }}: </span>
           <span class="diagnostic-severity">{{ diagnostic.severity }}: </span>
+          <span class="diagnostic-message-lead">{{ diagnostic.message.split("\n")[0] }}</span>
           <pre
-            class="diagnostic-message"
-          ><span class="diagnostic-message-lead">{{ diagnostic.message.split("\n")[0] }}</span><span v-if="diagnostic.message.includes('\n')" class="diagnostic-message-context">{{ "\n" + diagnostic.message.split("\n").slice(1).join("\n") }}</span></pre>
+            class="diagnostic-context-lines"
+          ><span v-for="(line, i) in diagnostic.message.split('\n').slice(1)" class="diagnostic-message-context"><span v-if="diagnostic.line" class="context-segment gutter">{{ i === 0 ? diagnostic.line : " ".repeat(String(diagnostic.line).length) }} | </span><span class="context-segment" :class="{ pointer: POINTER_ONLY.test(line) }">{{ line }}</span></span></pre>
         </button>
       </div>
     </div>
@@ -411,10 +416,11 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
   border: 0;
   border-bottom: 1px solid var(--border-faint);
   background: transparent;
-  color: var(--text-1);
   cursor: pointer;
   text-align: left;
   font: 11.5px var(--mono);
+  font-weight: 700;
+  color: var(--text-0);
 }
 .diagnostic-item:last-child {
   border-bottom: 0;
@@ -429,7 +435,7 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
 }
 .diagnostic-location {
   overflow: hidden;
-  color: var(--text-0);
+  color: inherit;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -447,15 +453,30 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
   display: inline;
   overflow-x: auto;
   margin: 0;
-  color: var(--text-0);
   white-space: pre;
 }
 .diagnostic-message-lead {
-  color: var(--text-0);
-  font-weight: 600;
+  color: inherit;
+  /* font-weight: 600; */
+}
+.diagnostic-context-lines {
+  margin: 0;
+  padding: 0;
+  font: inherit;
 }
 .diagnostic-message-context {
+  display: block;
   color: var(--text-1);
+  font-weight: 500;
+  font-family: var(--mono);
+  white-space: pre;
+}
+.context-segment.gutter {
+  color: var(--text-3);
+}
+.context-segment.pointer {
+  color: var(--green);
+  font-weight: 700;
 }
 .diagnostics-empty {
   padding: 14px;
