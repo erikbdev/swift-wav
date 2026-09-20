@@ -3,16 +3,16 @@ import vue from "@vitejs/plugin-vue";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 
-const repositoryRoot = fileURLToPath(new URL(".", import.meta.url));
+const repositoryRoot = (path: string) => resolve(fileURLToPath(new URL(".", import.meta.url)), path);
 
 export default defineConfig({
-  root: resolve(repositoryRoot, "Sources/SwiftWAVWeb"),
-  publicDir: resolve(repositoryRoot, "Public"),
+  root: repositoryRoot("Public"),
+  publicDir: repositoryRoot("Public/static"),
   resolve: {
     alias: {
       // Vapor is shipped as a separate Vue runtime build. A bare `vue`
       // import resolves to the VDOM runtime unless this alias is explicit.
-      vue: resolve(repositoryRoot, "node_modules/vue/dist/vue.runtime-with-vapor.esm-browser.js"),
+      vue: repositoryRoot("node_modules/vue/dist/vue.runtime-with-vapor.esm-browser.js"),
     },
   },
   plugins: [
@@ -27,7 +27,7 @@ export default defineConfig({
     format: "es",
   },
   build: {
-    outDir: resolve(repositoryRoot, "build"),
+    outDir: repositoryRoot("dist"),
     emptyOutDir: true,
     sourcemap: true,
   },

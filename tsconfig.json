@@ -14,10 +14,6 @@
     "noEmit": true,
     "types": ["vite/client"]
   },
-  "include": [
-    "Sources/SwiftWAVWeb/**/*.ts",
-    "Sources/SwiftWAVWeb/**/*.vue",
-    "Sources/SwiftWAVWeb/**/*.d.ts",
-    "vite.config.ts"
-  ]
+  "include": ["Public/**/*.ts", "Public/**/*.vue", "Public/**/*.d.ts", "vite.config.ts"],
+  "exclude": ["Public/static"]
 }

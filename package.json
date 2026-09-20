@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "vue-tsc --noEmit",
-    "format": "oxfmt Sources/SwiftWAVWeb"
+    "format": "oxfmt Public"
   },
   "dependencies": {
     "@bjorn3/browser_wasi_shim": "0.4.2",

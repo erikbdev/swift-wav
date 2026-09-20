@@ -5,7 +5,7 @@ node_modules
 .vercel
 .netlify
 .wrangler
-/build
+/dist
 
 # OS
 .DS_Store
@@ -23,4 +23,4 @@ vite.config.ts.timestamp-*
 
 # swift
 .build
-Public/toolchain
+Public/static/toolchain

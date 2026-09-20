@@ -12,9 +12,21 @@ let package = Package(
       targets: ["SwiftWAVCore"]
     )
   ],
+  dependencies: [
+    .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.4.0"),
+    .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.25.0"),
+  ],
   targets: [
     .target(name: "SwiftWAVCore"),
     .target(name: "SwiftWAVEngine"),
+    .executableTarget(
+      name: "SwiftWAVServer",
+      dependencies: [
+        .product(name: "ArgumentParser", package: "swift-argument-parser"),
+        .product(name: "Hummingbird", package: "hummingbird"),
+        .product(name: "HummingbirdRouter", package: "hummingbird"),
+      ]
+    ),
     .testTarget(
       name: "SwiftWAVCoreTests",
       dependencies: ["SwiftWAVCore"]

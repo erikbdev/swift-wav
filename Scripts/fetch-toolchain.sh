@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+
 # Downloads the precompiled swift-toolchain-wasm release artifacts
 # (https://github.com/tothambrus11/swift-toolchain-wasm) that let the browser
 # editor compile and run Swift in-process via WASI, then shrinks them in
@@ -31,11 +32,12 @@
 #
 # Apache-2.0 license (matching upstream LLVM/Swift). See:
 # https://github.com/tothambrus11/swift-toolchain-wasm/blob/main/LICENSE
+
 set -euo pipefail
 
 TAG="swift-6.3.3-wasm"
 BASE_URL="https://github.com/erikbdev/swift-toolchain-wasm/releases/download/${TAG}"
-DEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/Public/toolchain"
+DEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/Public/static/toolchain"
 
 WASM_FILES=(
   "swift-frontend.wasm"
