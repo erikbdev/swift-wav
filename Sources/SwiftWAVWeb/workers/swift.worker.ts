@@ -293,6 +293,7 @@ const swiftCompiler = memoize(async () => {
           ],
           [sysrootPreopen(), moduleCachePreopen(), buildPreopen()],
         );
+        console.log("[swift-frontend] stdout:", frontendResult.stdout, "stderr:", frontendResult.stderr);
 
         if (frontendResult.exitCode !== 0) {
           return {
@@ -341,6 +342,7 @@ const swiftCompiler = memoize(async () => {
         ];
 
         const linkResult = await runWasiCommand(linker, linkerArgv, [sysrootPreopen(), buildPreopen()]);
+        console.log("[wasm-ld] stdout:", linkResult.stdout, "stderr:", linkResult.stderr);
         const programFile = buildDir.get("main.wasm");
         if (linkResult.exitCode !== 0 || !(programFile instanceof File)) {
           return {
@@ -356,6 +358,7 @@ const swiftCompiler = memoize(async () => {
         // since a well-behaved program is free to write to stderr as output.
         const programModule = await WebAssembly.compile(programFile.data as BufferSource);
         const runResult = await runWasiCommand(programModule, ["main"], []);
+        console.log("[program] stderr:", runResult.stderr);
 
         return {
           stage: "run",
@@ -403,6 +406,7 @@ const swiftCompiler = memoize(async () => {
         ];
 
         const result = await runWasiCommand(ideTest, argv, [sysrootPreopen(), moduleCachePreopen(), buildPreopen()]);
+        console.log("[swift-ide-test] stdout:", result.stdout, "stderr:", result.stderr);
         // return { items: parseCompletionResults(result.stdout), diagnostics: result.stderr };
         return {
           items: parseCompletionResults(result.stdout),

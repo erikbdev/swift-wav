@@ -142,28 +142,31 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
       <button type="button" class="tab tab-add" title="New Swift file" @click="openCreateInput">+</button>
     </div>
 
-    <div ref="editorHost" class="cm-host"></div>
+    <div class="editor-container">
+      <div ref="editorHost" class="cm-host"></div>
+      <div class="diagnostics-panel" :hidden="!diagnosticsOpen">
+        <div v-if="!diagnosticList.length" class="diagnostics-empty">No diagnostics.</div>
+        <button
+          v-for="diagnostic in diagnosticList"
+          :key="`${diagnostic.severity}:${diagnostic.file}:${diagnostic.line}:${diagnostic.column}:${diagnostic.message}`"
+          type="button"
+          :class="['diagnostic-item', diagnostic.severity]"
+          @click="revealDiagnostic(diagnostic)"
+        >
+          <span v-if="diagnostic.file" class="diagnostic-location">{{ [diagnostic.file, diagnostic.line, diagnostic.column].filter((s) => s !== null && s !== undefined).join(":") }}: </span>
+          <span class="diagnostic-severity">{{ diagnostic.severity }}: </span>
+          <pre
+            class="diagnostic-message"
+          ><span class="diagnostic-message-lead">{{ diagnostic.message.split("\n")[0] }}</span><span v-if="diagnostic.message.includes('\n')" class="diagnostic-message-context">{{ "\n" + diagnostic.message.split("\n").slice(1).join("\n") }}</span></pre>
+        </button>
+      </div>
+    </div>
 
     <div class="diagnostics-bar">
       <button class="diagnostics-toggle" :class="{ 'has-errors': errorCount, 'has-warnings': !errorCount && warningCount }" type="button" :aria-expanded="diagnosticsOpen" @click="toggleDiagnostics">
         <span class="diagnostics-icon">{{ errorCount || warningCount ? "!" : "✓" }}</span>
         <span>Diagnostics</span>
         <span class="diagnostics-count">{{ diagnosticList.length }}</span>
-      </button>
-    </div>
-
-    <div class="diagnostics-panel" :hidden="!diagnosticsOpen">
-      <div v-if="!diagnosticList.length" class="diagnostics-empty">No diagnostics.</div>
-      <button
-        v-for="diagnostic in diagnosticList"
-        :key="`${diagnostic.severity}:${diagnostic.file}:${diagnostic.line}:${diagnostic.column}:${diagnostic.message}`"
-        type="button"
-        :class="['diagnostic-item', diagnostic.severity]"
-        @click="revealDiagnostic(diagnostic)"
-      >
-        <span v-if="diagnostic.file" class="diagnostic-location">{{ [diagnostic.file, diagnostic.line, diagnostic.column].filter((s) => s !== null && s !== undefined).join(":") }}: </span>
-        <span class="diagnostic-severity">{{ diagnostic.severity }}: </span>
-        <pre class="diagnostic-message"><span class="diagnostic-message-lead">{{ diagnostic.message.split("\n")[0] }}</span><span v-if="diagnostic.message.includes('\n')" class="diagnostic-message-context">{{ "\n" + diagnostic.message.split("\n").slice(1).join("\n") }}</span></pre>
       </button>
     </div>
   </div>
@@ -178,8 +181,6 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
   background: var(--bg-1);
   position: relative;
 }
-
-/* ---------- Tab bar + editor ---------- */
 
 .tabbar {
   display: flex;
@@ -295,6 +296,13 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
   color: var(--text-0);
   font: 12px var(--mono);
 }
+.editor-container {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg-1);
+}
+
 .cm-host {
   flex: 1;
   min-height: 0;
@@ -381,16 +389,16 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
 
 .diagnostics-panel {
   position: absolute;
-  right: 8px;
-  bottom: 38px;
-  left: 8px;
+  right: 0px;
+  bottom: 0px;
+  left: 0px;
   z-index: 10;
   display: flex;
   flex-direction: column;
   max-height: min(320px, 45vh);
   overflow-y: auto;
   border: 1px solid var(--border-strong);
-  border-radius: var(--r-md);
+  border-bottom: 0;
   background: rgba(27, 26, 24, 0.98);
   box-shadow: var(--shadow-card);
 }
@@ -405,7 +413,6 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
   background: transparent;
   color: var(--text-1);
   cursor: pointer;
-  font: inherit;
   text-align: left;
   font: 11.5px var(--mono);
 }

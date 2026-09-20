@@ -29,7 +29,6 @@ export function useWorkspace() {
   const files = reactive<Record<string, string>>({ ...stored.files });
   const activeFile = ref(stored.active);
   const activeContent = computed(() => files[activeFile.value] ?? "");
-  console.log(`workspace: ${JSON.stringify(stored)}`);
 
   function persist() {
     try {
