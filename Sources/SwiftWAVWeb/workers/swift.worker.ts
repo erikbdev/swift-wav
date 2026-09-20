@@ -136,6 +136,55 @@ const commonFrontendArgs = [
   "main",
 ];
 
+// ---------- Diagnostic parsing ----------
+
+// Matches swift-frontend/clang-style diagnostic lines, e.g.:
+//   /build/main.swift:5:3: error: unknown type name 'uint3d_t'
+const DIAGNOSTIC_LINE = /^(.+?):(\d+):(\d+):\s*(error|warning|note):\s*(.*)$/;
+
+/**
+ * Parses a tool's raw stderr lines into structured diagnostics. Lines that
+ * open a new `file:line:col: severity: message` diagnostic start a fresh
+ * entry (including "note:" follow-ups, which surface as their own
+ * diagnostic); any other line (source snippet, caret, fix-it) is folded into
+ * the message of whichever diagnostic precedes it. Falls back to a single
+ * error diagnostic carrying the whole blob when nothing matches the format,
+ * since tools like wasm-ld don't emit file:line:col diagnostics.
+ */
+function parseDiagnostics(lines: string[]): Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  for (const rawLine of lines) {
+    const match = rawLine.match(DIAGNOSTIC_LINE);
+    if (match) {
+      const [, file, line, column, severity, message] = match;
+      diagnostics.push({
+        file: file.replace(/^\/build\//, ""),
+        line: Number(line),
+        column: Number(column),
+        severity: severity as Diagnostic["severity"],
+        message,
+      });
+      continue;
+    }
+
+    const current = diagnostics.at(-1);
+    if (current && rawLine.trim()) current.message += `\n${rawLine}`;
+  }
+
+  if (!diagnostics.length && lines.some((line) => line.trim())) {
+    diagnostics.push({
+      file: null,
+      line: null,
+      column: null,
+      severity: "error",
+      message: lines.join("\n"),
+    });
+  }
+
+  return diagnostics;
+}
+
 // ---------- Code completion parsing ----------
 
 const COMPLETION_TOKEN = "COMPLETE";
@@ -249,18 +298,13 @@ const swiftCompiler = memoize(async () => {
           return {
             stage: "frontend",
             exitCode: frontendResult.exitCode,
-            // TODO: parse frontendResult.stderr
-            diagnostics: [
-              {
-                file: null,
-                line: null,
-                column: null,
-                severity: "error",
-                message: frontendResult.stderr.join("\n"),
-              },
-            ] satisfies Diagnostic[],
+            diagnostics: parseDiagnostics(frontendResult.stderr),
           };
         }
+
+        // The frontend can still emit warnings/notes on success; carry them
+        // through so a clean compile doesn't silently drop them.
+        const frontendDiagnostics = parseDiagnostics(frontendResult.stderr);
 
         // 2. wasm-ld: link the object file against the wasm32-wasip1 stdlib.
         const linkerArgv = [
@@ -302,21 +346,14 @@ const swiftCompiler = memoize(async () => {
           return {
             stage: "linker",
             exitCode: linkResult.exitCode,
-            diagnostics: [
-              {
-                file: null,
-                line: null,
-                column: null,
-                severity: "error",
-                message: linkResult.stderr.join("\n"),
-              },
-            ] satisfies Diagnostic[], // TODO: parse stderr
-            // stdout: linkResult.stdout,
-            // stderr: linkResult.stderr,
+            diagnostics: [...frontendDiagnostics, ...parseDiagnostics(linkResult.stderr)],
           };
         }
 
-        // 3. Run the freshly linked program itself.
+        // 3. Run the freshly linked program itself. Its stdout is the
+        // program's own output, not a diagnostic; its stderr only becomes a
+        // diagnostic when the run actually fails (a trap or non-zero exit),
+        // since a well-behaved program is free to write to stderr as output.
         const programModule = await WebAssembly.compile(programFile.data as BufferSource);
         const runResult = await runWasiCommand(programModule, ["main"], []);
 
@@ -324,7 +361,7 @@ const swiftCompiler = memoize(async () => {
           stage: "run",
           exitCode: runResult.exitCode,
           stdout: runResult.stdout,
-          diagnostics: [] satisfies Diagnostic[], // TODO: parse stderr from both frontend and link
+          diagnostics: runResult.exitCode === 0 ? frontendDiagnostics : [...frontendDiagnostics, ...parseDiagnostics(runResult.stderr)],
         };
       } catch (e) {
         swiftCompiler.discard();

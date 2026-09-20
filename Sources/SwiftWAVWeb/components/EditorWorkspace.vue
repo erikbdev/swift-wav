@@ -163,7 +163,7 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
       >
         <span v-if="diagnostic.file" class="diagnostic-location">{{ [diagnostic.file, diagnostic.line, diagnostic.column].filter((s) => s !== null && s !== undefined).join(":") }}: </span>
         <span class="diagnostic-severity">{{ diagnostic.severity }}: </span>
-        <pre class="diagnostic-message">{{ diagnostic.message }}</pre>
+        <pre class="diagnostic-message"><span class="diagnostic-message-lead">{{ diagnostic.message.split("\n")[0] }}</span><span v-if="diagnostic.message.includes('\n')" class="diagnostic-message-context">{{ "\n" + diagnostic.message.split("\n").slice(1).join("\n") }}</span></pre>
       </button>
     </div>
   </div>
@@ -422,8 +422,7 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
 }
 .diagnostic-location {
   overflow: hidden;
-  color: var(--text-3);
-  font: 10px var(--mono);
+  color: var(--text-0);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -442,8 +441,14 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
   overflow-x: auto;
   margin: 0;
   color: var(--text-0);
-  font: 11.5px var(--mono);
   white-space: pre;
+}
+.diagnostic-message-lead {
+  color: var(--text-0);
+  font-weight: 600;
+}
+.diagnostic-message-context {
+  color: var(--text-1);
 }
 .diagnostics-empty {
   padding: 14px;
