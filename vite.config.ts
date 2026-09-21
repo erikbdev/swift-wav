@@ -33,12 +33,12 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "/toolchain": "http://127.0.0.1:8090",
+      "/toolchain": "http://127.0.0.1:8080",
     },
   },
   preview: {
     proxy: {
-      "/toolchain": "http://127.0.0.1:8090",
+      "/toolchain": "http://127.0.0.1:8080",
     },
   },
 });
