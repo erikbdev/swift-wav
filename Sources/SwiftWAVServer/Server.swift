@@ -25,25 +25,26 @@ struct Server: AsyncParsableCommand {
 
     // Middlewares
 
-    let publicFilesPath: String
-    #if DEBUG
-      publicFilesPath = "Public/static"
-    #else
-      publicFilesPath = "dist"
-    #endif
     router.addMiddleware {
       #if DEBUG
         CORSMiddleware(allowOrigin: .all)
         TracingMiddleware()
       #endif
 
+      #if DEBUG
+        let publicFilesPath = "Public/static"
+      #else
+        let publicFilesPath = "dist"
+      #endif
+
       let cacheControl = "public, max-age=31536000, immutable"
+      let variants: [PrecompressedFile.Variant] = [.br, .gzip]
       PrecompressedFileMiddleware(
         files: [
           "/toolchain/swift-ide-test.wasm": .init(
             contentType: "application/wasm",
             cacheControl: cacheControl,
-            variants: [.br, .gzip]
+            variants: variants
           ),
           "/toolchain/swift-frontend.wasm": .init(
             contentType: "application/wasm",
@@ -64,7 +65,6 @@ struct Server: AsyncParsableCommand {
       ) {
         FileMiddleware(
           publicFilesPath,
-          cacheControl: CacheControl([]),
           searchForIndexHtml: true,
         )
       }
