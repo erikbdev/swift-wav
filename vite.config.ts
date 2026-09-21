@@ -31,4 +31,14 @@ export default defineConfig({
     emptyOutDir: true,
     sourcemap: true,
   },
+  server: {
+    proxy: {
+      "/toolchain": "http://127.0.0.1:8090",
+    },
+  },
+  preview: {
+    proxy: {
+      "/toolchain": "http://127.0.0.1:8090",
+    },
+  },
 });

@@ -24,61 +24,32 @@ struct Server: AsyncParsableCommand {
     }
 
     // Middlewares
+
+    let publicFilesPath: String
     #if DEBUG
-      router.addMiddleware {
+      publicFilesPath = "Public/static"
+    #else
+      publicFilesPath = "dist"
+    #endif
+    router.addMiddleware {
+      #if DEBUG
         CORSMiddleware(allowOrigin: .all)
         TracingMiddleware()
-      }
-    #endif
+      #endif
 
-    // Serves dist/ (Vite's build output: index.html, hashed JS/CSS bundles,
-    // and the static assets it copies through) as static files, including
-    // index.html for "/".
-    router.addMiddleware {
-      FileMiddleware("dist", searchForIndexHtml: true)
-    }
-
-    // Serve the precompressed toolchain variant the browser supports.
-    let toolchainFileIO = FileIO()
-    let toolchainFiles: [(route: String, contentType: String)] = [
-      ("swift-ide-test.wasm", "application/wasm"),
-      ("swift-frontend.wasm", "application/wasm"),
-      ("wasm-ld.wasm", "application/wasm"),
-      ("swift-sysroot-core.tar", "application/x-tar"),
-    ]
-    for file in toolchainFiles {
-      router.get("/toolchain/\(file.route)") { request, context in
-        let acceptEncoding = (request.headers[.acceptEncoding] ?? "").lowercased()
-        let encoding: String?
-        let suffix: String
-        if acceptEncoding.contains("br") {
-          encoding = "br"
-          suffix = ".br"
-        } else if acceptEncoding.contains("gzip") {
-          encoding = "gzip"
-          suffix = ".gz"
-        } else {
-          encoding = nil
-          suffix = ""
-        }
-
-        let body = try await toolchainFileIO.loadFile(
-          path: "dist/toolchain/\(file.route)\(suffix)",
-          context: context
-        )
-        var headers: HTTPFields = [
-          .contentType: file.contentType,
-          .cacheControl: "public, max-age=31536000, immutable",
-          .vary: "Accept-Encoding",
-        ]
-        if let encoding {
-          headers[.contentEncoding] = encoding
-        }
-
-        return Response(
-          status: .ok,
-          headers: headers,
-          body: body
+      PrecompressedFileMiddleware(
+        contentTypes: [
+          "/toolchain/swift-ide-test.wasm": "application/wasm",
+          "/toolchain/swift-frontend.wasm": "application/wasm",
+          "/toolchain/wasm-ld.wasm": "application/wasm",
+          "/toolchain/swift-sysroot-core.tar": "application/x-tar",
+        ],
+        cacheControl: "public, max-age=31536000, immutable"
+      ) {
+        FileMiddleware(
+          publicFilesPath,
+          cacheControl: CacheControl([]),
+          searchForIndexHtml: true,
         )
       }
     }
