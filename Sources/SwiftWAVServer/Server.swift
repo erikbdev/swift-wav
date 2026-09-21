@@ -37,14 +37,30 @@ struct Server: AsyncParsableCommand {
         TracingMiddleware()
       #endif
 
+      let cacheControl = "public, max-age=31536000, immutable"
       PrecompressedFileMiddleware(
-        contentTypes: [
-          "/toolchain/swift-ide-test.wasm": "application/wasm",
-          "/toolchain/swift-frontend.wasm": "application/wasm",
-          "/toolchain/wasm-ld.wasm": "application/wasm",
-          "/toolchain/swift-sysroot-core.tar": "application/x-tar",
+        files: [
+          "/toolchain/swift-ide-test.wasm": .init(
+            contentType: "application/wasm",
+            cacheControl: cacheControl,
+            variants: [.br, .gzip]
+          ),
+          "/toolchain/swift-frontend.wasm": .init(
+            contentType: "application/wasm",
+            cacheControl: cacheControl,
+            variants: [.br, .gzip]
+          ),
+          "/toolchain/wasm-ld.wasm": .init(
+            contentType: "application/wasm",
+            cacheControl: cacheControl,
+            variants: [.br, .gzip]
+          ),
+          "/toolchain/swift-sysroot-core.tar": .init(
+            contentType: "application/x-tar",
+            cacheControl: cacheControl,
+            variants: [.br, .gzip]
+          ),
         ],
-        cacheControl: "public, max-age=31536000, immutable"
       ) {
         FileMiddleware(
           publicFilesPath,
