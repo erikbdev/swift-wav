@@ -43,7 +43,7 @@ export type WorkerResponse =
   | { id: number; type: "compile"; stage?: string; stdout?: string[]; diagnostics?: Diagnostic[]; exitCode?: number; error?: unknown }
   | { id: number; type: "complete"; items?: CompletionItem[]; diagnostics?: Diagnostic[]; error?: unknown };
 
-/** The terminal response `type` a given request `type` resolves with. */
+/** The response `type` a given request `type` resolves with. */
 export type ResultTypeFor<T extends WorkerRequest["type"]> = T extends "preload" ? "preload" : T extends "compile" ? "compile" : "complete";
 
 const TOOLCHAIN_BASE = "/toolchain";
@@ -80,10 +80,7 @@ async function fetchWithProgress(url: string, contentType?: string): Promise<Res
           post({
             id: -1,
             type: "preload",
-            progress: Math.min(
-              (completedDownloads.size / PRELOAD_ASSET_COUNT) * DOWNLOAD_PROGRESS_WEIGHT,
-              DOWNLOAD_PROGRESS_WEIGHT,
-            ),
+            progress: Math.min((completedDownloads.size / PRELOAD_ASSET_COUNT) * DOWNLOAD_PROGRESS_WEIGHT, DOWNLOAD_PROGRESS_WEIGHT),
           });
           controller.close();
           return;
