@@ -19,11 +19,6 @@ const emit = defineEmits<{
 
 <template>
   <aside class="runtime-panel" aria-live="polite">
-    <div class="panel-summary">
-      <span>COMPILER</span>
-      <span class="panel-meta">{{ error ? "OFFLINE" : "LOADING" }}</span>
-    </div>
-
     <div class="runtime-content">
       <div class="runtime-message">
         <span class="runtime-marker" :class="{ error }" aria-hidden="true">
@@ -36,15 +31,7 @@ const emit = defineEmits<{
           <div class="track-type">SWIFT TOOLCHAIN</div>
           <p>{{ error ? "The compiler could not be loaded." : status }}</p>
 
-          <div
-            v-if="!error"
-            class="runtime-progress"
-            role="progressbar"
-            aria-label="Loading Swift toolchain"
-            :aria-valuenow="Math.round(progress * 100)"
-            aria-valuemin="0"
-            aria-valuemax="100"
-          >
+          <div v-if="!error" class="runtime-progress" role="progressbar" aria-label="Loading Swift toolchain" :aria-valuenow="Math.round(progress * 100)" aria-valuemin="0" aria-valuemax="100">
             <span :style="{ width: `${Math.max(progress * 100, 3)}%` }"></span>
           </div>
           <p v-else class="runtime-error-detail">{{ error }}</p>

@@ -1,6 +1,7 @@
 import Foundation
 import HTTPTypes
 import Hummingbird
+import OrderedCollections
 
 struct PrecompressedFile: Sendable {
   struct Variant: Sendable {
@@ -29,8 +30,6 @@ struct PrecompressedFile: Sendable {
   }
 }
 
-/// Wraps Hummingbird's own `FileMiddleware` to serve a browser-compatible
-/// precompressed variant for a fixed set of paths.
 struct PrecompressedFileMiddleware<Context: RequestContext, Provider: FileProvider>: RouterMiddleware
 where Provider.FileAttributes: FileMiddlewareFileAttributes {
   let fileMiddleware: FileMiddleware<Context, Provider>
@@ -53,7 +52,37 @@ where Provider.FileAttributes: FileMiddlewareFileAttributes {
       return try await fileMiddleware.handle(request, context: context, next: next)
     }
 
-    let acceptedEncodings = Self.parseAcceptEncoding(request.headers[.acceptEncoding])
+    let acceptedEncodings = (request.headers[.acceptEncoding] ?? "")
+      .split(separator: ",", omittingEmptySubsequences: true)
+      .reduce(into: OrderedDictionary<String, Double>()) { result, item in
+        let parts = item.split(separator: ";", omittingEmptySubsequences: true)
+        let name = parts[0].trimmingCharacters(in: .whitespaces)
+          .lowercased()
+
+        guard !name.isEmpty else {
+          return
+        }
+
+        var quality = 1.0
+        var valid = true
+        for parameter in parts.dropFirst() {
+          let pair = parameter.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+          guard pair.count == 2 else { continue }
+          let key = pair[0].trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+          guard key == "q" else { continue }
+
+          guard let parsedQuality = Double(pair[1].trimmingCharacters(in: .whitespacesAndNewlines)), (0...1).contains(parsedQuality) else {
+            valid = false
+            break
+          }
+          quality = parsedQuality
+        }
+
+        if valid {
+          result[name] = quality
+        }
+      }
+
     let candidates = file.variants
       .enumerated()
       .compactMap { index, variant -> (index: Int, variant: PrecompressedFile.Variant, quality: Double)? in
@@ -134,45 +163,5 @@ where Provider.FileAttributes: FileMiddlewareFileAttributes {
     }
 
     return response
-  }
-
-  private static func parseAcceptEncoding(_ header: String?) -> [String: Double] {
-    guard let header else { return [:] }
-
-    var qualities: [String: Double] = [:]
-    for item in header.split(separator: ",", omittingEmptySubsequences: true) {
-      let parts = item.split(separator: ";", omittingEmptySubsequences: true)
-      let name = parts[0]
-        .trimmingCharacters(in: .whitespacesAndNewlines)
-        .lowercased()
-      guard !name.isEmpty else { continue }
-
-      var quality = 1.0
-      var valid = true
-      for parameter in parts.dropFirst() {
-        let pair = parameter.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
-        guard pair.count == 2 else { continue }
-        let key = pair[0]
-          .trimmingCharacters(in: .whitespacesAndNewlines)
-          .lowercased()
-        guard key == "q" else { continue }
-
-        guard
-          let parsedQuality = Double(
-            pair[1].trimmingCharacters(in: .whitespacesAndNewlines)
-          ),
-          (0...1).contains(parsedQuality)
-        else {
-          valid = false
-          break
-        }
-        quality = parsedQuality
-      }
-
-      if valid {
-        qualities[name] = quality
-      }
-    }
-    return qualities
   }
 }
