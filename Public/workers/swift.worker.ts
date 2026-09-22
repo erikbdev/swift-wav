@@ -61,7 +61,7 @@ function post(message: WorkerResponse): void {
 
 // swift-ide-test is loaded lazily for autocomplete, so it is not part of the
 // initial preload progress.
-const PRELOAD_ASSET_COUNT = 3;
+const PRELOAD_ASSET_COUNT = 3 + 4; // toolchain wasm/tar + SwiftWAV's 4 lib files
 const DOWNLOAD_PROGRESS_WEIGHT = 0.8;
 const SETUP_PROGRESS = 0.95;
 const completedDownloads = new Set<string>();
@@ -109,6 +109,23 @@ const sysrootModule = memoize(() =>
     .then(untar),
 );
 
+// SwiftWAV's own prebuilt library: its three .swiftmodule interfaces (so
+// `import SwiftWAV` typechecks) plus the static archive containing
+// SwiftWAV, SwiftWAVCore, and SwiftWAVEngine's object code (so wasm-ld can
+// resolve it). Built for wasm32-unknown-wasip1 via `swift build --swift-sdk
+// swift-6.3.3-RELEASE_wasm` and copied from .build/wasm32-unknown-wasip1.
+const SWIFTWAV_LIB_FILES = ["SwiftWAV.swiftmodule", "SwiftWAVCore.swiftmodule", "SwiftWAVEngine.swiftmodule", "libSwiftWAV.a"];
+const swiftwavLib = memoize(async () => {
+  const dir = new Map();
+  await Promise.all(
+    SWIFTWAV_LIB_FILES.map(async (name) => {
+      const res = await fetchWithProgress(`${TOOLCHAIN_BASE}/lib/${name}`);
+      dir.set(name, new File(new Uint8Array(await res.arrayBuffer())));
+    }),
+  );
+  return dir;
+});
+
 /** Common `-frontend`-family flags shared by swift-frontend and swift-ide-test. */
 const commonFrontendArgs = [
   "-target",
@@ -127,6 +144,8 @@ const commonFrontendArgs = [
   "-fmodules-cache-path=/module-cache",
   "-module-name",
   "main",
+  "-I",
+  "/lib",
 ];
 
 // ---------- Diagnostic parsing ----------
@@ -242,7 +261,7 @@ function parseCompletionResults(stdoutLines: string[]): CompletionItem[] {
 }
 
 const swiftCompiler = memoize(async () => {
-  const [frontend, linker, sysroot] = await Promise.all([frontendModule(), linkerModule(), sysrootModule()]);
+  const [frontend, linker, sysroot, swiftwav] = await Promise.all([frontendModule(), linkerModule(), sysrootModule(), swiftwavLib()]);
 
   /**
    * The Clang module cache (SwiftShims, wasi-libc's own modules) that
@@ -256,6 +275,7 @@ const swiftCompiler = memoize(async () => {
 
   const sysrootPreopen = () => new PreopenDirectory("/sysroot", sysroot.contents);
   const moduleCachePreopen = () => new PreopenDirectory("/module-cache", moduleCache.contents);
+  const swiftwavPreopen = () => new PreopenDirectory("/lib", swiftwav);
 
   return {
     // Compiles every file in the workspace as one module (whole-module
@@ -285,7 +305,7 @@ const swiftCompiler = memoize(async () => {
             "-o",
             "/build/main.o",
           ],
-          [sysrootPreopen(), moduleCachePreopen(), buildPreopen()],
+          [sysrootPreopen(), moduleCachePreopen(), swiftwavPreopen(), buildPreopen()],
         );
         console.log("[swift-frontend] stdout:", frontendResult.stdout, "stderr:", frontendResult.stderr);
 
@@ -311,6 +331,8 @@ const swiftCompiler = memoize(async () => {
           "/sysroot/wasi-sysroot/lib/wasm32-wasip1/crt1-command.o",
           "/sysroot/swift/lib/swift_static/wasi/wasm32/swiftrt.o",
           "/build/main.o",
+          "-L/lib",
+          "-lSwiftWAV",
           "-lswiftSwiftOnoneSupport",
           "-lswiftCore",
           "-lswift_Concurrency",
@@ -335,7 +357,7 @@ const swiftCompiler = memoize(async () => {
           "/build/main.wasm",
         ];
 
-        const linkResult = await runWasiCommand(linker, linkerArgv, [sysrootPreopen(), buildPreopen()]);
+        const linkResult = await runWasiCommand(linker, linkerArgv, [sysrootPreopen(), swiftwavPreopen(), buildPreopen()]);
         console.log("[wasm-ld] stdout:", linkResult.stdout, "stderr:", linkResult.stderr);
         const programFile = buildDir.get("main.wasm");
         if (linkResult.exitCode !== 0 || !(programFile instanceof File)) {
@@ -400,7 +422,7 @@ const swiftCompiler = memoize(async () => {
           ...commonFrontendArgs,
         ];
 
-        const result = await runWasiCommand(ideTest, argv, [sysrootPreopen(), moduleCachePreopen(), buildPreopen()]);
+        const result = await runWasiCommand(ideTest, argv, [sysrootPreopen(), moduleCachePreopen(), swiftwavPreopen(), buildPreopen()]);
         console.log("[swift-ide-test] stdout:", result.stdout, "stderr:", result.stderr);
         // return { items: parseCompletionResults(result.stdout), diagnostics: result.stderr };
         return {

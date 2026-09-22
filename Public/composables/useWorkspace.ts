@@ -3,15 +3,12 @@ import type { WorkspaceSnapshot, Workspace } from "../types";
 
 const STORAGE_KEY = "swift-wav:workspace";
 const DEFAULT_FILE = "Song.swift";
-const DEFAULT_CONTENT = `struct MySong: Song {
+const DEFAULT_CONTENT = `import SwiftWAV
+
+@main
+struct MySong: Song {
   var body: some Timeline {
-    Track("drums") {
-      Pattern {
-        Sample("bd")
-        Sample("hh")
-        Sample("sd")
-        Sample("hh")
-      }
+    Track("Drums") {
     }
   }
 }
