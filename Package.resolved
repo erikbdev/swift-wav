@@ -1,5 +1,5 @@
 {
-  "originHash" : "97e6d2ba77425e53f2a7b755e68907adbe92f75ff35479bea3327d8c6bc5e3c0",
+  "originHash" : "7197aeebfa417d52ac80c91ec8f1aa9eb1be663f213018170e076bd1ed8eb454",
   "pins" : [
     {
       "identity" : "async-http-client",
