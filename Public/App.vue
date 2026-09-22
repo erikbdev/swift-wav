@@ -1,5 +1,6 @@
 <script setup lang="ts" vapor>
 import EditorWorkspace from "./components/EditorWorkspace.vue";
+import RuntimePanel from "./components/RuntimePanel.vue";
 import TimelinePanel from "./components/TimelinePanel.vue";
 import TopBar from "./components/TopBar.vue";
 import { useSwiftCompiler } from "./composables/useSwiftCompiler";
@@ -39,10 +40,13 @@ function runCurrentFile() {
         @delete-file="workspace.deleteFile"
       />
 
-      <div v-if="!compiler.toolchainReady.value">
-        <progress max="1" :value="compiler.loadingProgress.value"></progress>
-        <p>{{ compiler.status.value }}</p>
-      </div>
+      <RuntimePanel
+        v-if="!compiler.toolchainReady.value"
+        :status="compiler.status.value"
+        :error="compiler.loadError.value"
+        :progress="compiler.loadingProgress.value"
+        @retry="compiler.preload"
+      />
       <TimelinePanel v-else />
     </div>
   </div>

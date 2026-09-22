@@ -11,6 +11,7 @@ export function useSwiftCompiler() {
   const runLabel = ref("Play");
   const runDisabled = ref(true);
   const status = ref("Downloading Swift toolchain…");
+  const loadError = ref<string | null>(null);
   const toolchainReady = ref(false);
   const running = ref(false);
   const diagnostics = ref<Diagnostic[]>([]);
@@ -58,19 +59,22 @@ export function useSwiftCompiler() {
 
   async function preload() {
     runDisabled.value = true;
+    loadError.value = null;
     loadingProgress.value = 0;
-    status.value = "Downloading Swift toolchain...";
+    status.value = "Downloading Swift toolchain…";
 
     try {
       const result = await request("preload", {});
       if (result.error) throw result.error;
       loadingProgress.value = 1;
       toolchainReady.value = true;
+      loadError.value = null;
       status.value = "Ready";
       runDisabled.value = false;
     } catch (error) {
       toolchainReady.value = false;
       loadingProgress.value = 0;
+      loadError.value = errorMessage(error);
       status.value = "Toolchain download failed";
       diagnostics.value = [
         {
@@ -90,6 +94,7 @@ export function useSwiftCompiler() {
 
     if (!toolchainReady.value) {
       await preload();
+      if (!toolchainReady.value) return;
     }
 
     running.value = true;
@@ -133,12 +138,14 @@ export function useSwiftCompiler() {
   return {
     runLabel,
     status,
+    loadError,
     runDisabled,
     loadingProgress,
     toolchainReady,
     running,
     diagnostics,
     run,
+    preload,
     autocomplete,
     clearDiagnostics,
   };

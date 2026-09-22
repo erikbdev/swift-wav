@@ -54,7 +54,9 @@ function post(message: WorkerResponse): void {
 
 // ---------- Fetching toolchain assets ----------
 
-const TOOLCHAIN_ASSET_COUNT = 4;
+// swift-ide-test is loaded lazily for autocomplete, so it is not part of the
+// initial preload progress.
+const PRELOAD_ASSET_COUNT = 3;
 const DOWNLOAD_PROGRESS_WEIGHT = 0.8;
 const SETUP_PROGRESS = 0.95;
 const completedDownloads = new Set<string>();
@@ -79,7 +81,7 @@ async function fetchWithProgress(url: string, contentType?: string): Promise<Res
             id: -1,
             type: "preload",
             progress: Math.min(
-              (completedDownloads.size / TOOLCHAIN_ASSET_COUNT) * DOWNLOAD_PROGRESS_WEIGHT,
+              (completedDownloads.size / PRELOAD_ASSET_COUNT) * DOWNLOAD_PROGRESS_WEIGHT,
               DOWNLOAD_PROGRESS_WEIGHT,
             ),
           });
