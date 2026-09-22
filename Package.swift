@@ -8,8 +8,8 @@ let package = Package(
   platforms: [.macOS(.v14)],
   products: [
     .library(
-      name: "SwiftWAVCore",
-      targets: ["SwiftWAVCore"]
+      name: "SwiftWAV",
+      targets: ["SwiftWAV"]
     )
   ],
   dependencies: [
@@ -19,6 +19,7 @@ let package = Package(
   targets: [
     .target(name: "SwiftWAVCore"),
     .target(name: "SwiftWAVEngine"),
+    .target(name: "SwiftWAV", dependencies: ["SwiftWAVCore", "SwiftWAVEngine"]),
     .executableTarget(
       name: "SwiftWAVServer",
       dependencies: [
