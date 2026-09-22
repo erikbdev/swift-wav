@@ -2,7 +2,7 @@ import { onBeforeUnmount, onMounted, ref } from "vue";
 import SwiftWorker from "../workers/swift.worker.ts?worker";
 
 import type { WorkspaceSnapshot } from "../types";
-import type { ResultTypeFor, WorkerRequest, WorkerResponse, Diagnostic } from "../workers/swift.worker";
+import type { ResultTypeFor, WorkerRequest, WorkerResponse, Diagnostic, Output } from "../workers/swift.worker";
 
 const DOWNLOAD_PROGRESS_WEIGHT = 0.8;
 
@@ -15,6 +15,7 @@ export function useSwiftCompiler() {
   const toolchainReady = ref(false);
   const running = ref(false);
   const diagnostics = ref<Diagnostic[]>([]);
+  const output = ref<Output[]>([]);
   const loadingProgress = ref(0);
   let nextRequestId = 0;
 
@@ -100,11 +101,13 @@ export function useSwiftCompiler() {
     running.value = true;
     runDisabled.value = true;
     diagnostics.value = [];
+    output.value = [];
     status.value = "Compiling...";
 
     try {
       const result = await request("compile", { files: workspace.files, primaryFile: workspace.primaryFile });
       diagnostics.value = result.diagnostics ?? [];
+      output.value = result.output ?? [];
     } catch (error) {
       diagnostics.value = [
         {
@@ -144,6 +147,7 @@ export function useSwiftCompiler() {
     toolchainReady,
     running,
     diagnostics,
+    output,
     run,
     preload,
     autocomplete,

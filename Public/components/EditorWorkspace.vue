@@ -1,12 +1,13 @@
 <script setup lang="ts" vapor>
 import { computed, nextTick, ref, unref, watch } from "vue";
 import { useCodeMirror } from "../composables/useCodeMirror";
-import type { CompletionItem, Diagnostic } from "../workers/swift.worker";
+import type { CompletionItem, Diagnostic, Output } from "../workers/swift.worker";
 
 const props = defineProps<{
   files: Record<string, string>;
   activeFile: string;
   diagnostics: Diagnostic[];
+  output: Output[];
   requestCompletions: (position: number) => Promise<CompletionItem[]>;
 }>();
 
@@ -21,6 +22,10 @@ const fileMap = computed(() => unref(props.files) || {});
 const currentFile = computed(() => unref(props.activeFile) || "");
 const diagnosticList = computed(() => {
   const value = unref(props.diagnostics);
+  return Array.isArray(value) ? value : [];
+});
+const outputList = computed(() => {
+  const value = unref(props.output);
   return Array.isArray(value) ? value : [];
 });
 
@@ -107,6 +112,18 @@ watch(
 
 function toggleDiagnostics() {
   diagnosticsOpen.value = !diagnosticsOpen.value;
+  if (diagnosticsOpen.value) outputOpen.value = false;
+}
+
+const outputOpen = ref(false);
+
+function toggleOutput() {
+  outputOpen.value = !outputOpen.value;
+  if (outputOpen.value) diagnosticsOpen.value = false;
+}
+
+function formatTimestamp(timestamp: number) {
+  return new Date(timestamp).toLocaleTimeString(undefined, { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
 async function revealDiagnostic(diagnostic: Diagnostic) {
@@ -165,6 +182,14 @@ const POINTER_ONLY = /^[\s^~]*[\^~][\s^~]*$/;
           ><span v-for="(line, i) in diagnostic.message.split('\n').slice(1)" class="diagnostic-message-context"><span v-if="diagnostic.line" class="context-segment gutter">{{ i === 0 ? diagnostic.line : " ".repeat(String(diagnostic.line).length) }} | </span><span class="context-segment" :class="{ pointer: POINTER_ONLY.test(line) }">{{ line }}</span></span></pre>
         </button>
       </div>
+
+      <div class="output-panel" :hidden="!outputOpen">
+        <div v-if="!outputList.length" class="diagnostics-empty">No output.</div>
+        <div v-for="(entry, i) in outputList" :key="i" class="output-item">
+          <span class="output-timestamp">{{ formatTimestamp(entry.timestamp) }}</span>
+          <pre class="output-message">{{ entry.message }}</pre>
+        </div>
+      </div>
     </div>
 
     <div class="diagnostics-bar">
@@ -172,6 +197,11 @@ const POINTER_ONLY = /^[\s^~]*[\^~][\s^~]*$/;
         <span class="diagnostics-icon">{{ errorCount || warningCount ? "!" : "✓" }}</span>
         <span>Diagnostics</span>
         <span class="diagnostics-count">{{ diagnosticList.length }}</span>
+      </button>
+      <button class="diagnostics-toggle" type="button" :aria-expanded="outputOpen" @click="toggleOutput">
+        <span class="diagnostics-icon">›</span>
+        <span>Output</span>
+        <span class="diagnostics-count">{{ outputList.length }}</span>
       </button>
     </div>
   </div>
@@ -482,6 +512,42 @@ const POINTER_ONLY = /^[\s^~]*[\^~][\s^~]*$/;
   padding: 14px;
   color: var(--text-3);
   font: 11px var(--mono);
+}
+
+.output-panel {
+  position: absolute;
+  right: 0px;
+  bottom: 0px;
+  left: 0px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  max-height: min(320px, 45vh);
+  overflow-y: auto;
+  border: 1px solid var(--border-strong);
+  border-bottom: 0;
+  background: rgba(27, 26, 24, 0.98);
+  box-shadow: var(--shadow-card);
+}
+.output-item {
+  display: flex;
+  gap: 10px;
+  padding: 6px 11px;
+  border-bottom: 1px solid var(--border-faint);
+  font: 11.5px var(--mono);
+}
+.output-item:last-child {
+  border-bottom: 0;
+}
+.output-timestamp {
+  flex-shrink: 0;
+  color: var(--text-3);
+}
+.output-message {
+  margin: 0;
+  overflow-x: auto;
+  white-space: pre;
+  color: var(--text-0);
 }
 
 @media (max-width: 800px) {

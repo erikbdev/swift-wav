@@ -33,6 +33,11 @@ export type Diagnostic = {
   message: string;
 };
 
+export type Output = {
+  message: string;
+  timestamp: number;
+};
+
 export type WorkerRequest =
   | { id: number; type: "preload" }
   | { id: number; type: "compile"; files: SourceFiles; primaryFile: string }
@@ -40,7 +45,7 @@ export type WorkerRequest =
 
 export type WorkerResponse =
   | { id: number; type: "preload"; progress?: number; error?: unknown }
-  | { id: number; type: "compile"; stage?: string; stdout?: string[]; diagnostics?: Diagnostic[]; exitCode?: number; error?: unknown }
+  | { id: number; type: "compile"; stage?: string; output?: Output[]; diagnostics?: Diagnostic[]; exitCode?: number; error?: unknown }
   | { id: number; type: "complete"; items?: CompletionItem[]; diagnostics?: Diagnostic[]; error?: unknown };
 
 /** The response `type` a given request `type` resolves with. */
@@ -349,10 +354,11 @@ const swiftCompiler = memoize(async () => {
         const runResult = await runWasiCommand(programModule, ["main"], []);
         console.log("[program] stdout:", runResult.stdout, "stderr: ", runResult.stderr);
 
+        const timestamp = Date.now();
         return {
           stage: "run",
           exitCode: runResult.exitCode,
-          stdout: runResult.stdout,
+          output: runResult.stdout.map((message) => ({ message, timestamp })),
           diagnostics: runResult.exitCode === 0 ? frontendDiagnostics : [...frontendDiagnostics, ...parseDiagnostics(runResult.stderr)],
         };
       } catch (e) {

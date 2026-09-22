@@ -9,7 +9,7 @@ import { useWorkspace } from "./composables/useWorkspace";
 const workspace = useWorkspace();
 const compiler = useSwiftCompiler();
 const { files, activeFile } = workspace;
-const { runLabel, runDisabled, diagnostics } = compiler;
+const { runLabel, runDisabled, diagnostics, output } = compiler;
 
 function handleFileUpdate({ name, content }: { name: string; content: string }) {
   workspace.updateFile(name, content);
@@ -33,6 +33,7 @@ function runCurrentFile() {
         :files="files"
         :active-file="activeFile"
         :diagnostics="diagnostics"
+        :output="output"
         :request-completions="requestCompletions"
         @select-file="workspace.selectFile"
         @create-file="workspace.createFile"

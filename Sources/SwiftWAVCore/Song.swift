@@ -20,8 +20,3 @@ public struct Configuration: Hashable, Sendable {
     self.tempo = tempo
   }
 }
-
-extension Song {
-  public static func main() {
-  }
-}
