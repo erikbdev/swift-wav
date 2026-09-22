@@ -4,6 +4,8 @@ import SwiftWorker from "../workers/swift.worker.ts?worker";
 import type { WorkspaceSnapshot } from "../types";
 import type { ResultTypeFor, WorkerRequest, WorkerResponse, Diagnostic } from "../workers/swift.worker";
 
+const DOWNLOAD_PROGRESS_WEIGHT = 0.8;
+
 export function useSwiftCompiler() {
   const worker = new SwiftWorker();
   const runLabel = ref("Play");
@@ -22,14 +24,13 @@ export function useSwiftCompiler() {
         const message = event.data;
         if (message.id !== id && message.id !== -1) return;
 
-        if (message.type == "preload") {
-          loadingProgress.value = message.progress ?? 0;
-        }
-
         if (message.type === "preload" && message.id === -1) {
-          loadingProgress.value = message.progress ?? 0;
-          if (message.progress && message.progress > 0) {
-            status.value = `Downloading runtime… ${message.progress * 100}%`;
+          const progress = Number.isFinite(message.progress) ? (message.progress ?? 0) : 0;
+          loadingProgress.value = progress;
+          if (progress >= DOWNLOAD_PROGRESS_WEIGHT) {
+            status.value = "Setting up Swift compiler…";
+          } else if (progress > 0) {
+            status.value = `Downloading runtime… ${Math.round((progress / DOWNLOAD_PROGRESS_WEIGHT) * 100)}%`;
           } else {
             status.value = "Downloading runtime…";
           }
@@ -57,16 +58,19 @@ export function useSwiftCompiler() {
 
   async function preload() {
     runDisabled.value = true;
+    loadingProgress.value = 0;
     status.value = "Downloading Swift toolchain...";
 
     try {
       const result = await request("preload", {});
       if (result.error) throw result.error;
+      loadingProgress.value = 1;
       toolchainReady.value = true;
       status.value = "Ready";
       runDisabled.value = false;
     } catch (error) {
       toolchainReady.value = false;
+      loadingProgress.value = 0;
       status.value = "Toolchain download failed";
       diagnostics.value = [
         {

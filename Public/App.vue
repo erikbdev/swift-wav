@@ -41,7 +41,7 @@ function runCurrentFile() {
 
       <div v-if="!compiler.toolchainReady.value">
         <progress max="1" :value="compiler.loadingProgress.value"></progress>
-        <p>Preparing Swift compiler...</p>
+        <p>{{ compiler.status.value }}</p>
       </div>
       <TimelinePanel v-else />
     </div>

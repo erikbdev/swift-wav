@@ -54,55 +54,44 @@ function post(message: WorkerResponse): void {
 
 // ---------- Fetching toolchain assets ----------
 
-const downloadProgress = new Map<string, { loaded: number; total: number }>();
+const TOOLCHAIN_ASSET_COUNT = 4;
+const DOWNLOAD_PROGRESS_WEIGHT = 0.8;
+const SETUP_PROGRESS = 0.95;
+const completedDownloads = new Set<string>();
 
 /**
- * Fetches `url`, reporting cumulative decoded-byte progress across every
- * in-flight fetch made through this function, and returns a Response with
- * `contentType` set (needed for WebAssembly.compileStreaming).
- *
- * The server sends these precompressed (gzip, per Content-Encoding); fetch
- * transparently decodes before this ever sees a byte, so a compressed
- * response's Content-Length isn't a valid decoded total, and progress for it
- * is reported as indeterminate (0 total) rather than lied about.
+ * Fetches `url`, reports completion progress for the toolchain assets, and
+ * returns a Response with `contentType` set (needed for WebAssembly.compileStreaming).
  */
 async function fetchWithProgress(url: string, contentType?: string): Promise<Response> {
-  const reportProgress = () => {
-    let loaded = 0;
-    let total = 0;
-    for (const entry of downloadProgress.values()) {
-      loaded += entry.loaded;
-      total += entry.total;
-    }
-    post({ id: -1, type: "preload", progress: loaded / total });
-  };
-
-  downloadProgress.set(url, { loaded: 0, total: 0 });
   const res = await fetch(url);
   if (!res.ok) throw new Error(`fetching ${url} failed: ${res.status}`);
-  const total = res.headers.has("content-encoding") ? 0 : Number(res.headers.get("content-length")) || 0;
-  downloadProgress.set(url, { loaded: 0, total });
-  reportProgress();
   if (!res.body) throw new Error(`fetching ${url} returned an empty body`);
 
   const reader = res.body.getReader();
-  const trackedStream = new ReadableStream<Uint8Array>({
-    async pull(controller) {
-      const { done, value } = await reader.read();
-      if (done) {
-        controller.close();
-        return;
-      }
-      const progress = downloadProgress.get(url);
-      if (progress) progress.loaded += value.byteLength;
-      reportProgress();
-      controller.enqueue(value);
-    },
-    cancel(reason) {
-      return reader.cancel(reason);
-    },
-  });
-  return new Response(trackedStream, contentType ? { headers: { "Content-Type": contentType } } : undefined);
+  return new Response(
+    new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        const { done, value } = await reader.read();
+        if (done) {
+          completedDownloads.add(url);
+          post({
+            id: -1,
+            type: "preload",
+            progress: Math.min(
+              (completedDownloads.size / TOOLCHAIN_ASSET_COUNT) * DOWNLOAD_PROGRESS_WEIGHT,
+              DOWNLOAD_PROGRESS_WEIGHT,
+            ),
+          });
+          controller.close();
+          return;
+        }
+        controller.enqueue(value);
+      },
+      cancel: (reason) => reader.cancel(reason),
+    }),
+    contentType ? { headers: { "Content-Type": contentType } } : undefined,
+  );
 }
 
 // ---------- Toolchain artifacts: fetched + compiled once, then shared ----------
@@ -283,11 +272,12 @@ const swiftCompiler = memoize(async () => {
             "swift-frontend",
             "-frontend",
             "-c",
-            ...[...buildDir.keys()].map((n) => `/build/${n}`),
+            ...(Object.keys(files).includes("main.swift") ? [] : ["-parse-as-library"]),
             ...commonFrontendArgs,
             "-use-static-resource-dir",
             "-no-color-diagnostics",
             "-empty-abi-descriptor",
+            ...[...buildDir.keys()].map((n) => `/build/${n}`),
             "-o",
             "/build/main.o",
           ],
@@ -307,7 +297,7 @@ const swiftCompiler = memoize(async () => {
         // through so a clean compile doesn't silently drop them.
         const frontendDiagnostics = parseDiagnostics(frontendResult.stderr);
 
-        // 2. wasm-ld: link the object file against the wasm32-wasip1 stdlib.
+        // 2. wasm-ld: link the object file against the wasm32-wasip1 stdlib
         const linkerArgv = [
           "wasm-ld",
           "-m",
@@ -358,7 +348,7 @@ const swiftCompiler = memoize(async () => {
         // since a well-behaved program is free to write to stderr as output.
         const programModule = await WebAssembly.compile(programFile.data as BufferSource);
         const runResult = await runWasiCommand(programModule, ["main"], []);
-        console.log("[program] stderr:", runResult.stderr);
+        console.log("[program] stdout:", runResult.stdout, "stderr: ", runResult.stderr);
 
         return {
           stage: "run",
@@ -427,6 +417,7 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
     case "preload": {
       try {
         await swiftCompiler();
+        post({ id: -1, type: msg.type, progress: SETUP_PROGRESS });
         post({ id: msg.id, type: msg.type, progress: 1.0 });
       } catch (e) {
         post({ id: msg.id, type: msg.type, error: e });
