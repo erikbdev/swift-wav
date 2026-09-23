@@ -1,27 +1,30 @@
-export function memoize<T>(fn: () => T) {
-  let value: T | null = null;
-  let set = false;
+
+export function memoize<T>(fn: () => T | Promise<T>) {
+  let state: { id: number, value: T | Promise<T> } | null = null;
   return Object.assign(
     () => {
-      if (!set) {
-        const result = fn();
-        if (result instanceof Promise) {
-          value = result.catch((e) => {
-            set = false;
-            value = null;
+      if (state) return state.value;
+
+      const id = Date.now()
+      const value = fn();
+      if (value instanceof Promise) {
+        state = {
+          id,
+          value: value.catch((e) => {
+            if (id == state?.id) {
+              state = null;
+            }
             throw e;
-          }) as T;
-        } else {
-          value = result;
-        }
-        set = true;
+          })
+        };
+      } else {
+        state = { id, value }
       }
-      return value as T;
+      return state.value
     },
     {
       discard() {
-        value = null;
-        set = false;
+        state = null;
         return;
       },
     },
