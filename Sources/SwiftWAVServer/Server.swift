@@ -61,6 +61,11 @@ struct Server: AsyncParsableCommand {
             cacheControl: cacheControl,
             variants: [.br, .gzip]
           ),
+          "/toolchain/libSwiftWAV.tar": .init(
+            contentType: "application/x-tar",
+            cacheControl: cacheControl,
+            variants: [.br, .gzip]
+          ),
         ],
       ) {
         FileMiddleware(

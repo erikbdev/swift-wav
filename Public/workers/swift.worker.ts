@@ -59,11 +59,6 @@ function post(message: WorkerResponse): void {
 
 // ---------- Fetching toolchain assets ----------
 
-// swift-ide-test is loaded lazily for autocomplete, so it is not part of the
-// initial preload progress.
-const PRELOAD_ASSET_COUNT = 3 + 4; // toolchain wasm/tar + SwiftWAV's 4 lib files
-const DOWNLOAD_PROGRESS_WEIGHT = 0.8;
-const SETUP_PROGRESS = 0.95;
 const completedDownloads = new Set<string>();
 
 /**
@@ -85,7 +80,7 @@ async function fetchWithProgress(url: string, contentType?: string): Promise<Res
           post({
             id: -1,
             type: "preload",
-            progress: Math.min((completedDownloads.size / PRELOAD_ASSET_COUNT) * DOWNLOAD_PROGRESS_WEIGHT, DOWNLOAD_PROGRESS_WEIGHT),
+            progress: Math.min(completedDownloads.size / 4, 1.0),
           });
           controller.close();
           return;
@@ -109,22 +104,11 @@ const sysrootModule = memoize(() =>
     .then(untar),
 );
 
-// SwiftWAV's own prebuilt library: its three .swiftmodule interfaces (so
-// `import SwiftWAV` typechecks) plus the static archive containing
-// SwiftWAV, SwiftWAVCore, and SwiftWAVEngine's object code (so wasm-ld can
-// resolve it). Built for wasm32-unknown-wasip1 via `swift build --swift-sdk
-// swift-6.3.3-RELEASE_wasm` and copied from .build/wasm32-unknown-wasip1.
-const SWIFTWAV_LIB_FILES = ["SwiftWAV.swiftmodule", "SwiftWAVCore.swiftmodule", "SwiftWAVEngine.swiftmodule", "libSwiftWAV.a"];
-const swiftwavLib = memoize(async () => {
-  const dir = new Map();
-  await Promise.all(
-    SWIFTWAV_LIB_FILES.map(async (name) => {
-      const res = await fetchWithProgress(`${TOOLCHAIN_BASE}/lib/${name}`);
-      dir.set(name, new File(new Uint8Array(await res.arrayBuffer())));
-    }),
-  );
-  return dir;
-});
+const libSwiftWAVModule = memoize(() =>
+  fetchWithProgress(`${TOOLCHAIN_BASE}/libSwiftWAV.tar`)
+    .then((r) => r.arrayBuffer())
+    .then(untar),
+);
 
 /** Common `-frontend`-family flags shared by swift-frontend and swift-ide-test. */
 const commonFrontendArgs = [
@@ -261,7 +245,7 @@ function parseCompletionResults(stdoutLines: string[]): CompletionItem[] {
 }
 
 const swiftCompiler = memoize(async () => {
-  const [frontend, linker, sysroot, swiftwav] = await Promise.all([frontendModule(), linkerModule(), sysrootModule(), swiftwavLib()]);
+  const [frontend, linker, sysroot, swiftwav] = await Promise.all([frontendModule(), linkerModule(), sysrootModule(), libSwiftWAVModule()]);
 
   /**
    * The Clang module cache (SwiftShims, wasi-libc's own modules) that
@@ -275,7 +259,7 @@ const swiftCompiler = memoize(async () => {
 
   const sysrootPreopen = () => new PreopenDirectory("/sysroot", sysroot.contents);
   const moduleCachePreopen = () => new PreopenDirectory("/module-cache", moduleCache.contents);
-  const swiftwavPreopen = () => new PreopenDirectory("/lib", swiftwav);
+  const swiftwavPreopen = () => new PreopenDirectory("/lib", swiftwav.contents);
 
   return {
     // Compiles every file in the workspace as one module (whole-module
@@ -424,7 +408,6 @@ const swiftCompiler = memoize(async () => {
 
         const result = await runWasiCommand(ideTest, argv, [sysrootPreopen(), moduleCachePreopen(), swiftwavPreopen(), buildPreopen()]);
         console.log("[swift-ide-test] stdout:", result.stdout, "stderr:", result.stderr);
-        // return { items: parseCompletionResults(result.stdout), diagnostics: result.stderr };
         return {
           items: parseCompletionResults(result.stdout),
           diagnostics: [],
@@ -444,7 +427,7 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
     case "preload": {
       try {
         await swiftCompiler();
-        post({ id: -1, type: msg.type, progress: SETUP_PROGRESS });
+        post({ id: -1, type: msg.type, progress: 1.0 });
         post({ id: msg.id, type: msg.type, progress: 1.0 });
       } catch (e) {
         post({ id: msg.id, type: msg.type, error: e });
