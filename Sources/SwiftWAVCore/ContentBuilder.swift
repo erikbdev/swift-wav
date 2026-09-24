@@ -8,8 +8,8 @@ public enum ContentBuilder {
     content
   }
 
-  public static func buildBlock<each T>(_ content: repeat each T) -> TupleContent<repeat each T> {
-    TupleContent<repeat each T>((repeat each content))
+  public static func buildBlock<T, each S>(_ content: T, _ rest: repeat each S) -> TupleContent<T, repeat each S> {
+    TupleContent<T, repeat each S>((content, repeat each rest))
   }
 
   public static func buildEither<T, S>(first content: T) -> _ConditionalContent<T, S> {
@@ -20,16 +20,16 @@ public enum ContentBuilder {
     _ConditionalContent(content: .falseContent(content))
   }
 
-  public static func buildExpression<T>(_ content: T) -> T {
-    content
-  }
-
   public static func buildArray<T>(_ content: [T]) -> _ArrayContent<T> {
     _ArrayContent<T>(content: content)
   }
 
   public static func buildOptional<T>(_ content: T?) -> _OptionalContent<T> {
     _OptionalContent<T>(content)
+  }
+
+  public static func buildExpression<T>(_ content: T) -> T {
+    content
   }
 }
 
