@@ -40,16 +40,18 @@ export type Output = {
 
 export type WorkerRequest =
   | { id: number; type: "preload" }
+  | { id: number; type: "typecheck"; files: SourceFiles }
   | { id: number; type: "compile"; files: SourceFiles; primaryFile: string }
   | { id: number; type: "complete"; files: SourceFiles; primaryFile: string; offset: number };
 
 export type WorkerResponse =
   | { id: number; type: "preload"; progress?: number; error?: unknown }
+  | { id: number; type: "typecheck"; diagnostics?: Diagnostic[]; exitCode?: number; error?: unknown }
   | { id: number; type: "compile"; stage?: string; output?: Output[]; diagnostics?: Diagnostic[]; exitCode?: number; error?: unknown }
   | { id: number; type: "complete"; items?: CompletionItem[]; diagnostics?: Diagnostic[]; error?: unknown };
 
 /** The response `type` a given request `type` resolves with. */
-export type ResultTypeFor<T extends WorkerRequest["type"]> = T extends "preload" ? "preload" : T extends "compile" ? "compile" : "complete";
+export type ResultTypeFor<T extends WorkerRequest["type"]> = T extends "preload" ? "preload" : T extends "typecheck" ? "typecheck" : T extends "compile" ? "compile" : "complete";
 
 const TOOLCHAIN_BASE = "/toolchain";
 
@@ -262,6 +264,36 @@ const swiftCompiler = memoize(async () => {
   const swiftwavPreopen = () => new PreopenDirectory("/lib", swiftwav.contents);
 
   return {
+    // Typecheck the complete workspace without linking or executing it.
+    async typecheck(files: SourceFiles) {
+      try {
+        const buildDir = new Map();
+        for (const [name, content] of Object.entries(files)) {
+          buildDir.set(name, new File(new TextEncoder().encode(content)));
+        }
+
+        const buildPreopen = () => new PreopenDirectory("/build", buildDir);
+        const result = await runWasiCommand(
+          frontend,
+          [
+            "swift-frontend",
+            "-frontend",
+            "-typecheck",
+            ...(Object.keys(files).includes("main.swift") ? [] : ["-parse-as-library"]),
+            ...commonFrontendArgs,
+            "-use-static-resource-dir",
+            "-no-color-diagnostics",
+            ...[...buildDir.keys()].map((name) => `/build/${name}`),
+          ],
+          [sysrootPreopen(), moduleCachePreopen(), swiftwavPreopen(), buildPreopen()],
+        );
+        return { exitCode: result.exitCode, diagnostics: parseDiagnostics(result.stderr) };
+      } catch (e) {
+        swiftCompiler.discard();
+        throw e;
+      }
+    },
+
     // Compiles every file in the workspace as one module (whole-module
     // optimization is implicit whenever swift-frontend is given more than
     // one input and no `-primary-file`) and runs the result.
@@ -440,6 +472,17 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
         const compiler = await swiftCompiler();
         const { items, diagnostics } = await compiler.autocomplete(msg.files, msg.primaryFile, msg.offset);
         post({ id: msg.id, type: msg.type, items, diagnostics });
+      } catch (e) {
+        post({ id: msg.id, type: msg.type, error: e });
+      }
+      break;
+    }
+
+    case "typecheck": {
+      try {
+        const compiler = await swiftCompiler();
+        const result = await compiler.typecheck(msg.files);
+        post({ id: msg.id, type: msg.type, ...result });
       } catch (e) {
         post({ id: msg.id, type: msg.type, error: e });
       }

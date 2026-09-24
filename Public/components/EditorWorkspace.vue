@@ -8,6 +8,7 @@ const props = defineProps<{
   activeFile: string;
   diagnostics: Diagnostic[];
   output: Output[];
+  activity: "typechecking" | "building" | null;
   requestCompletions: (position: number) => Promise<CompletionItem[]>;
 }>();
 
@@ -97,8 +98,7 @@ const diagnosticsOpen = ref(false);
 const errorCount = computed(() => diagnosticList.value.filter((problem) => problem.severity === "error").length);
 const warningCount = computed(() => diagnosticList.value.filter((problem) => problem.severity === "warning").length);
 
-// A failed compile should surface its diagnostics immediately, while an
-// edit clears the panel through the compiler composable just like an IDE.
+// Keep the diagnostics panel open while its messages remain available.
 watch(
   () => diagnosticList.value,
   (nextDiagnostic) => {
@@ -203,6 +203,10 @@ const POINTER_ONLY = /^[\s^~]*[\^~][\s^~]*$/;
         <span>Output</span>
         <span class="diagnostics-count">{{ outputList.length }}</span>
       </button>
+      <span v-if="activity" class="editor-activity" role="status" aria-live="polite">
+        <span class="activity-spinner" aria-hidden="true"></span>
+        {{ activity === "typechecking" ? "Type checking…" : "Building…" }}
+      </span>
     </div>
   </div>
 </template>
@@ -420,6 +424,28 @@ const POINTER_ONLY = /^[\s^~]*[\^~][\s^~]*$/;
   background: var(--bg-4);
   color: var(--text-1);
   text-align: center;
+}
+.editor-activity {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+  padding: 0 8px;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.activity-spinner {
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--border-strong);
+  border-top-color: var(--accent-hi);
+  border-radius: 50%;
+  animation: activity-spin 0.8s linear infinite;
+}
+@keyframes activity-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .diagnostics-panel {

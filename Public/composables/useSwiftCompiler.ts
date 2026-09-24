@@ -14,10 +14,12 @@ export function useSwiftCompiler() {
   const loadError = ref<string | null>(null);
   const toolchainReady = ref(false);
   const running = ref(false);
+  const activity = ref<"typechecking" | "building" | null>(null);
   const diagnostics = ref<Diagnostic[]>([]);
   const output = ref<Output[]>([]);
   const loadingProgress = ref(0);
   let nextRequestId = 0;
+  let pendingTypecheck: WorkspaceSnapshot | null = null;
 
   function request<T extends WorkerRequest["type"]>(type: T, payload: Omit<Extract<WorkerRequest, { type: T }>, "id" | "type">): Promise<Extract<WorkerResponse, { type: ResultTypeFor<T> }>> {
     const id = ++nextRequestId;
@@ -71,7 +73,8 @@ export function useSwiftCompiler() {
       toolchainReady.value = true;
       loadError.value = null;
       status.value = "Ready";
-      runDisabled.value = false;
+      runDisabled.value = running.value;
+      if (pendingTypecheck) void drainTypechecks();
     } catch (error) {
       toolchainReady.value = false;
       loadingProgress.value = 0;
@@ -86,25 +89,26 @@ export function useSwiftCompiler() {
           message: `Failed to download Swift toolchain: \n\t ${errorMessage(error)}`,
         },
       ];
-      runDisabled.value = false;
+      runDisabled.value = running.value;
     }
   }
 
   async function run(workspace: WorkspaceSnapshot) {
     if (running.value) return;
 
-    if (!toolchainReady.value) {
-      await preload();
-      if (!toolchainReady.value) return;
-    }
-
     running.value = true;
     runDisabled.value = true;
-    diagnostics.value = [];
-    output.value = [];
-    status.value = "Compiling...";
 
     try {
+      if (!toolchainReady.value) {
+        await preload();
+        if (!toolchainReady.value) return;
+      }
+
+      activity.value = "building";
+      diagnostics.value = [];
+      output.value = [];
+      status.value = "Compiling...";
       const result = await request("compile", { files: workspace.files, primaryFile: workspace.primaryFile });
       diagnostics.value = result.diagnostics ?? [];
       output.value = result.output ?? [];
@@ -121,7 +125,54 @@ export function useSwiftCompiler() {
       status.value = "Compiler worker failed";
     } finally {
       running.value = false;
+      activity.value = null;
       runDisabled.value = false;
+      if (pendingTypecheck && toolchainReady.value) void drainTypechecks();
+    }
+  }
+
+  function typecheck(workspace: WorkspaceSnapshot) {
+    pendingTypecheck = workspace;
+    void drainTypechecks();
+  }
+
+  async function drainTypechecks() {
+    if (running.value || !toolchainReady.value || !pendingTypecheck) return;
+
+    running.value = true;
+    activity.value = "typechecking";
+    runDisabled.value = true;
+    status.value = "Type checking…";
+    try {
+      while (pendingTypecheck) {
+        const snapshot = pendingTypecheck;
+        pendingTypecheck = null;
+
+        try {
+          const result = await request("typecheck", { files: snapshot.files });
+          if (result.error) throw result.error;
+          if (!pendingTypecheck) diagnostics.value = result.diagnostics ?? [];
+        } catch (error) {
+          if (!pendingTypecheck) {
+            diagnostics.value = [
+              {
+                severity: "error",
+                file: null,
+                line: null,
+                column: null,
+                message: errorMessage(error),
+              },
+            ];
+            status.value = "Compiler worker failed";
+          }
+        }
+      }
+    } finally {
+      running.value = false;
+      activity.value = null;
+      runDisabled.value = false;
+      if (!pendingTypecheck && status.value === "Type checking…") status.value = "Ready";
+      if (pendingTypecheck) void drainTypechecks();
     }
   }
 
@@ -146,9 +197,11 @@ export function useSwiftCompiler() {
     loadingProgress,
     toolchainReady,
     running,
+    activity,
     diagnostics,
     output,
     run,
+    typecheck,
     preload,
     autocomplete,
     clearDiagnostics,
