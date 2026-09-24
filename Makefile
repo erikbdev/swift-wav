@@ -13,7 +13,7 @@ TARGET_TRIPLE := wasm32-unknown-wasip1
 BUILD_DIR := .build/$(TARGET_TRIPLE)/$(CONFIGURATION)
 MODULES := SwiftWAV SwiftWAVCore SwiftWAVEngine
 STAGE_DIR := $(DEST_DIR)/.libswiftwav
-SWIFT_SOURCES := $(shell find Sources/SwiftWAV Sources/SwiftWAVCore Sources/SwiftWAVEngine -name '*.swift')
+SWIFT_SOURCES := $(shell find $(addprefix Sources/,$(MODULES)) -type d -o -name '*.swift')
 
 .DEFAULT_GOAL := all
 .DELETE_ON_ERROR:
@@ -41,15 +41,17 @@ libswiftwav: $(DEST_DIR)/libSwiftWAV.tar $(DEST_DIR)/libSwiftWAV.tar.gz $(DEST_D
 
 $(BUILD_DIR)/libSwiftWAV.a: $(SWIFT_SOURCES) Package.swift
 	swift build --package-path $(CURDIR) --swift-sdk $(SWIFT_SDK) --product SwiftWAV -c $(CONFIGURATION)
+	touch $@
 
-$(STAGE_DIR)/libSwiftWAV.a: $(BUILD_DIR)/libSwiftWAV.a | $(STAGE_DIR)
-	cp $< $@
-
-$(STAGE_DIR)/%.swiftmodule: $(BUILD_DIR)/libSwiftWAV.a | $(STAGE_DIR)
-	cp $(BUILD_DIR)/Modules/$*.swiftmodule $@
-
-$(DEST_DIR)/libSwiftWAV.tar: $(STAGE_DIR)/libSwiftWAV.a $(addprefix $(STAGE_DIR)/,$(addsuffix .swiftmodule,$(MODULES)))
+# Stage the archive and module interfaces in a scratch dir, tar it, then
+# remove the staging dir so only libSwiftWAV.tar remains under DEST_DIR.
+$(DEST_DIR)/libSwiftWAV.tar: $(BUILD_DIR)/libSwiftWAV.a | $(DEST_DIR)
+	rm -rf $(STAGE_DIR)
+	mkdir -p $(STAGE_DIR)
+	cp $< $(STAGE_DIR)/
+	cp $(addprefix $(BUILD_DIR)/Modules/,$(addsuffix .swiftmodule,$(MODULES))) $(STAGE_DIR)/
 	tar -C $(STAGE_DIR) -cf $@ .
+	rm -rf $(STAGE_DIR)
 
 # Shared compression rules: brotli/gzip twins for anything under DEST_DIR,
 # used by both the fetched toolchain artifacts and libSwiftWAV.tar.
@@ -59,7 +61,7 @@ $(DEST_DIR)/%.gz: $(DEST_DIR)/%
 $(DEST_DIR)/%.br: $(DEST_DIR)/%
 	brotli -q 11 -f -o $@ $<
 
-$(DEST_DIR) $(STAGE_DIR):
+$(DEST_DIR):
 	mkdir -p $@
 
 clean:

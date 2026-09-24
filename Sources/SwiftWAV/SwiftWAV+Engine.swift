@@ -1,5 +1,6 @@
-import SwiftWAVCore
-import SwiftWAVEngine
+@_exported import SwiftWAVCore
+
+@_implementationOnly import SwiftWAVEngine
 
 extension Song {
   public static func main() throws {
