@@ -5,8 +5,8 @@
 // spawn processes, so the embedder replays swiftc's argv by hand.
 
 import { Directory, File, PreopenDirectory } from "@bjorn3/browser_wasi_shim";
-import { memoize } from "../../../utils/memoize";
-import { runWasiCommand } from "../../../utils/wasi-run";
+import { memoize } from "./memoize";
+import { runWasiCommand } from "./wasi-run";
 import type { SourceFiles } from "../types";
 import { parseCompletionResults } from "./completion";
 import { parseDiagnostics } from "./diagnostics";

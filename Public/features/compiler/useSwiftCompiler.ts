@@ -10,7 +10,6 @@ const DOWNLOAD_PROGRESS_WEIGHT = 0.8;
  * progress, the current activity, diagnostics, and program output.
  */
 export function useSwiftCompiler() {
-  const runLabel = ref("Play");
   const runDisabled = ref(true);
   const status = ref("Downloading Swift toolchain…");
   const loadError = ref<string | null>(null);
@@ -161,7 +160,6 @@ export function useSwiftCompiler() {
   onBeforeUnmount(() => client.terminate());
 
   return {
-    runLabel,
     status,
     loadError,
     runDisabled,

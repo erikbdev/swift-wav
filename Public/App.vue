@@ -11,9 +11,6 @@ import TimelinePanel from "./features/timeline/TimelinePanel.vue";
 import FileTabs from "./features/workspace/FileTabs.vue";
 import { useWorkspace } from "./features/workspace/useWorkspace";
 
-// The app shell: the only place that knows every feature and wires them
-// together. Features never import each other's components or composables.
-
 const workspace = useWorkspace();
 const compiler = useSwiftCompiler();
 useAutoTypecheck(
@@ -22,7 +19,7 @@ useAutoTypecheck(
 );
 
 const { files, activeFile } = workspace;
-const { runLabel, runDisabled, diagnostics, output, activity, toolchainReady, status, loadError, loadingProgress } = compiler;
+const { runDisabled, diagnostics, output, activity, toolchainReady, status, loadError, loadingProgress } = compiler;
 const fileNames = computed(() => Object.keys(files));
 const codeEditor = useTemplateRef("editor");
 
@@ -34,7 +31,6 @@ function run() {
   void compiler.run(workspace.snapshot());
 }
 
-/** Opens the file a diagnostic points into and moves the cursor to it. */
 async function revealDiagnostic(diagnostic: Diagnostic) {
   const target = fileNames.value.find((name) => diagnostic.file?.endsWith(name));
   if (target) workspace.selectFile(target);
@@ -45,7 +41,7 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
 
 <template>
   <div class="app">
-    <TopBar :run-label="runLabel" :disabled="runDisabled" @run="run" />
+    <TopBar :disabled="runDisabled" @run="run" />
 
     <div class="body">
       <main class="editor-column">
@@ -66,12 +62,14 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
   background: var(--bg-0);
   overflow: hidden;
 }
+
 .body {
   display: flex;
   min-height: 0;
   height: calc(100% - var(--topbar-h));
   overflow: hidden;
 }
+
 .editor-column {
   position: relative;
   display: flex;
@@ -87,6 +85,7 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
   .body {
     flex-direction: column;
   }
+
   .editor-column {
     flex: 1 1 58%;
     min-height: 360px;

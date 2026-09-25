@@ -1,31 +1,20 @@
 <script setup lang="ts" vapor>
-withDefaults(
-  defineProps<{
-    runLabel?: string;
-    disabled?: boolean;
-  }>(),
-  {
-    runLabel: "Run",
-    disabled: false,
-  },
-);
+defineProps<{
+  disabled: boolean;
+}>();
 
 const emit = defineEmits<{
   run: [];
 }>();
-
-function handleRun() {
-  emit("run");
-}
 </script>
 
 <template>
   <header class="topbar">
     <span class="brand">swift-wav</span>
     <div class="tb-spacer"></div>
-    <button id="run-button" class="tb-btn run" type="button" :disabled="disabled" @click="handleRun">
+    <button id="run-button" class="tb-btn run" type="button" :disabled="disabled" @click="emit('run')">
       <span class="tb-ico">▶</span>
-      <span id="run-label">{{ runLabel }}</span>
+      <span id="run-label">Play</span>
     </button>
   </header>
 </template>

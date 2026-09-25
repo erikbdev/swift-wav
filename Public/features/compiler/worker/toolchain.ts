@@ -2,17 +2,17 @@
 // wasm-ld, swift-ide-test, the sysroot, and libSwiftWAV), each once, and
 // reports cumulative download progress.
 
-import { memoize } from "../../../utils/memoize";
-import { untar } from "../../../utils/tar";
+import { memoize } from "./memoize";
+import { untar } from "./tar";
 
 const TOOLCHAIN_BASE = "/toolchain";
 
 /** The four assets every compiler needs; swift-ide-test is fetched on first completion. */
 const REQUIRED_DOWNLOADS = 4;
 
-export type Toolchain = ReturnType<typeof createToolchain>;
+export type Toolchain = ReturnType<typeof fetchToolchains>;
 
-export function createToolchain(onProgress: (progress: number) => void) {
+export function fetchToolchains(onProgress: (progress: number) => void) {
   const completedDownloads = new Set<string>();
 
   /**
