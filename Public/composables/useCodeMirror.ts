@@ -91,100 +91,6 @@ function swiftCompletionSource(requestCompletions: (position: number) => Promise
   };
 }
 
-interface CreateSwiftEditorStateOptions {
-  document: string;
-  onChange: (value: string) => void;
-  requestCompletions: (position: number) => Promise<CompletionItem[]>;
-}
-
-function createSwiftEditorState(options: CreateSwiftEditorStateOptions): EditorState {
-  return EditorState.create({
-    doc: options.document,
-    extensions: [
-      history(),
-      lineNumbers(),
-      highlightSpecialChars(),
-      drawSelection(),
-      dropCursor(),
-      highlightActiveLine(),
-      highlightActiveLineGutter(),
-      keymap.of([
-        ...defaultKeymap,
-        ...historyKeymap,
-        {
-          key: "Tab",
-          run: (target) => {
-            target.dispatch(target.state.replaceSelection("  "));
-            return true;
-          },
-        },
-      ]),
-      swift(),
-      autocompletion({ override: [swiftCompletionSource(options.requestCompletions)] }),
-
-      // Syntax highlight
-      syntaxHighlighting(
-        HighlightStyle.define([
-          { tag: t.keyword, color: "#ff6b45" },
-          { tag: t.controlKeyword, color: "#ff6b45" },
-          { tag: t.definitionKeyword, color: "#ff6b45" },
-          { tag: t.string, color: "#46c07e" },
-          { tag: t.comment, color: "#5f5c55", fontStyle: "italic" },
-          { tag: t.number, color: "#a884f0" },
-          { tag: t.bool, color: "#a884f0" },
-          { tag: t.typeName, color: "#4aa3e8" },
-          { tag: t.className, color: "#4aa3e8" },
-          { tag: t.function(t.variableName), color: "#d6a04a" },
-          { tag: t.propertyName, color: "#d6a04a" },
-          { tag: t.operator, color: "#a6a29a" },
-          { tag: t.punctuation, color: "#85817a" },
-          { tag: t.attributeName, color: "#a884f0" },
-        ]),
-      ),
-
-      // Theme
-      EditorView.theme(
-        {
-          "&": {
-            color: "#edece7",
-            backgroundColor: "#161514",
-            height: "100%",
-            fontSize: "12.5px",
-          },
-          ".cm-content": { caretColor: "#ff855f", fontFamily: "var(--mono)", padding: "12px 0" },
-          ".cm-cursor": { borderLeft: "2px solid #ff855f" },
-          ".cm-dropCursor": { borderLeft: "2px solid #ff855f" },
-          "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
-            backgroundColor: "rgba(255, 107, 69, 0.22)",
-          },
-          ".cm-activeLine": { backgroundColor: "rgba(255, 244, 230, 0.035)" },
-          ".cm-activeLineGutter": { backgroundColor: "rgba(255, 244, 230, 0.035)" },
-          ".cm-gutters": {
-            backgroundColor: "#161514",
-            color: "#5f5c55",
-            border: "none",
-          },
-          ".cm-scroller": { fontFamily: "var(--mono)" },
-        },
-        { dark: true },
-      ),
-      EditorView.updateListener.of((update) => {
-        if (update.docChanged) options.onChange(update.state.doc.toString());
-      }),
-    ],
-  });
-}
-
-function revealProblem(view: EditorView | null, problem: { line: number | null; column: number | null }): void {
-  if (!view || !problem.line) return;
-
-  const lineNumber = Math.min(Math.max(problem.line, 1), view.state.doc.lines);
-  const line = view.state.doc.line(lineNumber);
-  const position = Math.min(line.from + Math.max((problem.column ?? 1) - 1, 0), line.to);
-  view.dispatch({ selection: { anchor: position }, scrollIntoView: true });
-  view.focus();
-}
-
 interface UseCodeMirrorOptions {
   host: Ref<HTMLElement | null>;
   getDocument: () => string;
@@ -220,11 +126,83 @@ export function useCodeMirror(options: UseCodeMirrorOptions) {
     if (!options.host.value) return;
     destroy();
     options.host.value.replaceChildren();
-    const state = createSwiftEditorState({
-      document: options.getDocument(),
-      onChange: options.onChange,
-      requestCompletions: options.requestCompletions,
+
+    const state = EditorState.create({
+      doc: options.getDocument(),
+      extensions: [
+        history(),
+        lineNumbers(),
+        highlightSpecialChars(),
+        drawSelection(),
+        dropCursor(),
+        highlightActiveLine(),
+        highlightActiveLineGutter(),
+        keymap.of([
+          ...defaultKeymap,
+          ...historyKeymap,
+          {
+            key: "Tab",
+            run: (target) => {
+              target.dispatch(target.state.replaceSelection("  "));
+              return true;
+            },
+          },
+        ]),
+        swift(),
+        autocompletion({ override: [swiftCompletionSource(options.requestCompletions)] }),
+
+        // Syntax highlight
+        syntaxHighlighting(
+          HighlightStyle.define([
+            { tag: t.keyword, color: "#ff6b45" },
+            { tag: t.controlKeyword, color: "#ff6b45" },
+            { tag: t.definitionKeyword, color: "#ff6b45" },
+            { tag: t.string, color: "#46c07e" },
+            { tag: t.comment, color: "#5f5c55", fontStyle: "italic" },
+            { tag: t.number, color: "#a884f0" },
+            { tag: t.bool, color: "#a884f0" },
+            { tag: t.typeName, color: "#4aa3e8" },
+            { tag: t.className, color: "#4aa3e8" },
+            { tag: t.function(t.variableName), color: "#d6a04a" },
+            { tag: t.propertyName, color: "#d6a04a" },
+            { tag: t.operator, color: "#a6a29a" },
+            { tag: t.punctuation, color: "#85817a" },
+            { tag: t.attributeName, color: "#a884f0" },
+          ]),
+        ),
+
+        // Theme
+        EditorView.theme(
+          {
+            "&": {
+              color: "#edece7",
+              backgroundColor: "#161514",
+              height: "100%",
+              fontSize: "12.5px",
+            },
+            ".cm-content": { caretColor: "#ff855f", fontFamily: "var(--mono)", padding: "12px 0" },
+            ".cm-cursor": { borderLeft: "2px solid #ff855f" },
+            ".cm-dropCursor": { borderLeft: "2px solid #ff855f" },
+            "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
+              backgroundColor: "rgba(255, 107, 69, 0.22)",
+            },
+            ".cm-activeLine": { backgroundColor: "rgba(255, 244, 230, 0.035)" },
+            ".cm-activeLineGutter": { backgroundColor: "rgba(255, 244, 230, 0.035)" },
+            ".cm-gutters": {
+              backgroundColor: "#161514",
+              color: "#5f5c55",
+              border: "none",
+            },
+            ".cm-scroller": { fontFamily: "var(--mono)" },
+          },
+          { dark: true },
+        ),
+        EditorView.updateListener.of((update) => {
+          if (update.docChanged) options.onChange(update.state.doc.toString());
+        }),
+      ],
     });
+
     view = new EditorView({ state, parent: options.host.value });
   }
 
@@ -242,7 +220,13 @@ export function useCodeMirror(options: UseCodeMirrorOptions) {
   }
 
   function reveal(problem: { line: number | null; column: number | null }) {
-    revealProblem(view, problem);
+    if (!view || !problem.line) return;
+
+    const lineNumber = Math.min(Math.max(problem.line, 1), view.state.doc.lines);
+    const line = view.state.doc.line(lineNumber);
+    const position = Math.min(line.from + Math.max((problem.column ?? 1) - 1, 0), line.to);
+    view.dispatch({ selection: { anchor: position }, scrollIntoView: true });
+    view.focus();
   }
 
   onMounted(mount);
