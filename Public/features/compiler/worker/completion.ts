@@ -3,30 +3,7 @@
 // a semantic score for ranking, and insert text with Xcode-style editor
 // placeholders, with trailing closures already expanded.
 
-export type CompletionItem = {
-  /** The base name completions are matched against, e.g. "print" for "print(_:)". */
-  name: string;
-  /** The readable signature shown in the list, e.g. "print(items: Any...)". */
-  label: string;
-  /** The result type, e.g. "Void". */
-  detail: string;
-  kind: string;
-  /** SourceKit-LSP-style semantic score; 1 is neutral, higher ranks first. */
-  score: number;
-  /**
-   * The text to insert, with Xcode-style editor placeholders for arguments,
-   * e.g. "print(<#T##items: Any...##Any#>)".
-   */
-  sourceText: string;
-  /** How many characters before the completion point the insertion replaces, e.g. 1 to turn `.` into `?.`. */
-  erase: number;
-  /**
-   * Whether `sourceText` closes a call whose `(` is already typed, so an
-   * existing `)` right after the completion point should be replaced rather
-   * than kept.
-   */
-  closesCall: boolean;
-};
+import type { CompletionItem } from "../types";
 
 /**
  * One result line:

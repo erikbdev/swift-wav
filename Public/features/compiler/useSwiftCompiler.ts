@@ -1,13 +1,15 @@
 import { onBeforeUnmount, onMounted, ref } from "vue";
-import SwiftWorker from "../workers/swift.worker.ts?worker";
-
-import type { WorkspaceSnapshot } from "../types";
-import type { ResultTypeFor, WorkerRequest, WorkerResponse, Diagnostic, Output } from "../workers/swift.worker";
+import type { WorkspaceSnapshot } from "../workspace/types";
+import { createCompilerClient } from "./compilerClient";
+import type { Diagnostic, Output } from "./types";
 
 const DOWNLOAD_PROGRESS_WEIGHT = 0.8;
 
+/**
+ * Exposes the Swift compiler worker as reactive state: toolchain loading
+ * progress, the current activity, diagnostics, and program output.
+ */
 export function useSwiftCompiler() {
-  const worker = new SwiftWorker();
   const runLabel = ref("Play");
   const runDisabled = ref(true);
   const status = ref("Downloading Swift toolchain…");
@@ -18,47 +20,19 @@ export function useSwiftCompiler() {
   const diagnostics = ref<Diagnostic[]>([]);
   const output = ref<Output[]>([]);
   const loadingProgress = ref(0);
-  let nextRequestId = 0;
   let pendingTypecheck: WorkspaceSnapshot | null = null;
 
-  function request<T extends WorkerRequest["type"]>(type: T, payload: Omit<Extract<WorkerRequest, { type: T }>, "id" | "type">): Promise<Extract<WorkerResponse, { type: ResultTypeFor<T> }>> {
-    const id = ++nextRequestId;
-    return new Promise((resolve, reject) => {
-      const onMessage = (event: MessageEvent<WorkerResponse>) => {
-        const message = event.data;
-        if (message.id !== id && message.id !== -1) return;
-
-        if (message.type === "preload" && message.id === -1) {
-          const progress = Number.isFinite(message.progress) ? (message.progress ?? 0) : 0;
-          loadingProgress.value = progress;
-          if (progress >= DOWNLOAD_PROGRESS_WEIGHT) {
-            status.value = "Setting up Swift compiler…";
-          } else if (progress > 0) {
-            status.value = `Downloading runtime… ${Math.round((progress / DOWNLOAD_PROGRESS_WEIGHT) * 100)}%`;
-          } else {
-            status.value = "Downloading runtime…";
-          }
-        } else {
-          cleanup();
-          resolve(message as Extract<WorkerResponse, { type: ResultTypeFor<T> }>);
-        }
-      };
-
-      const onError = (event: ErrorEvent) => {
-        cleanup();
-        reject(event.error instanceof Error ? event.error : new Error(event.message));
-      };
-
-      function cleanup() {
-        worker.removeEventListener("message", onMessage);
-        worker.removeEventListener("error", onError);
-      }
-
-      worker.addEventListener("message", onMessage);
-      worker.addEventListener("error", onError);
-      worker.postMessage({ id, type, ...payload } as WorkerRequest);
-    });
-  }
+  const client = createCompilerClient((progress) => {
+    loadingProgress.value = progress;
+    if (progress >= DOWNLOAD_PROGRESS_WEIGHT) {
+      status.value = "Setting up Swift compiler…";
+    } else if (progress > 0) {
+      status.value = `Downloading runtime… ${Math.round((progress / DOWNLOAD_PROGRESS_WEIGHT) * 100)}%`;
+    } else {
+      status.value = "Downloading runtime…";
+    }
+  });
+  const request = client.request;
 
   async function preload() {
     runDisabled.value = true;
@@ -183,12 +157,8 @@ export function useSwiftCompiler() {
     return result.items ?? [];
   }
 
-  function clearDiagnostics() {
-    diagnostics.value = [];
-  }
-
   onMounted(() => preload());
-  onBeforeUnmount(() => worker.terminate());
+  onBeforeUnmount(() => client.terminate());
 
   return {
     runLabel,
@@ -205,7 +175,6 @@ export function useSwiftCompiler() {
     typecheck,
     preload,
     autocomplete,
-    clearDiagnostics,
   };
 }
 

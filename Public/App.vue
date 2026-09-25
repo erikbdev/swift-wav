@@ -1,72 +1,60 @@
 <script setup lang="ts" vapor>
-import { onBeforeUnmount, watch } from "vue";
-import EditorWorkspace from "./components/EditorWorkspace.vue";
-import RuntimePanel from "./components/RuntimePanel.vue";
-import TimelinePanel from "./components/TimelinePanel.vue";
+import { computed, nextTick, useTemplateRef } from "vue";
 import TopBar from "./components/TopBar.vue";
-import { useSwiftCompiler } from "./composables/useSwiftCompiler";
-import { useWorkspace } from "./composables/useWorkspace";
+import CompilerConsole from "./features/compiler/CompilerConsole.vue";
+import RuntimePanel from "./features/compiler/RuntimePanel.vue";
+import type { Diagnostic } from "./features/compiler/types";
+import { useAutoTypecheck } from "./features/compiler/useAutoTypecheck";
+import { useSwiftCompiler } from "./features/compiler/useSwiftCompiler";
+import CodeEditor from "./features/editor/CodeEditor.vue";
+import TimelinePanel from "./features/timeline/TimelinePanel.vue";
+import FileTabs from "./features/workspace/FileTabs.vue";
+import { useWorkspace } from "./features/workspace/useWorkspace";
+
+// The app shell: the only place that knows every feature and wires them
+// together. Features never import each other's components or composables.
 
 const workspace = useWorkspace();
 const compiler = useSwiftCompiler();
-const { files, activeFile } = workspace;
-const { runLabel, runDisabled, diagnostics, output } = compiler;
-let typecheckTimer: ReturnType<typeof setTimeout> | null = null;
-
-watch(
-  files,
-  () => {
-    if (typecheckTimer) clearTimeout(typecheckTimer);
-    typecheckTimer = setTimeout(() => {
-      typecheckTimer = null;
-      compiler.typecheck(workspace.snapshot());
-    }, 1000);
-  },
-  { deep: true },
+useAutoTypecheck(
+  () => workspace.files,
+  () => compiler.typecheck(workspace.snapshot()),
 );
 
-onBeforeUnmount(() => {
-  if (typecheckTimer) clearTimeout(typecheckTimer);
-});
+const { files, activeFile } = workspace;
+const { runLabel, runDisabled, diagnostics, output, activity, toolchainReady, status, loadError, loadingProgress } = compiler;
+const fileNames = computed(() => Object.keys(files));
+const codeEditor = useTemplateRef("editor");
 
-function handleFileUpdate({ name, content }: { name: string; content: string }) {
-  workspace.updateFile(name, content);
-}
-
-function requestCompletions(position: number) {
+function complete(position: number) {
   return compiler.autocomplete(workspace.snapshot(), position);
 }
 
-function runCurrentFile() {
+function run() {
   void compiler.run(workspace.snapshot());
+}
+
+/** Opens the file a diagnostic points into and moves the cursor to it. */
+async function revealDiagnostic(diagnostic: Diagnostic) {
+  const target = fileNames.value.find((name) => diagnostic.file?.endsWith(name));
+  if (target) workspace.selectFile(target);
+  await nextTick();
+  codeEditor.value?.reveal(diagnostic);
 }
 </script>
 
 <template>
   <div class="app">
-    <TopBar :run-label="runLabel" :disabled="runDisabled" @run="runCurrentFile" />
+    <TopBar :run-label="runLabel" :disabled="runDisabled" @run="run" />
 
     <div class="body">
-      <EditorWorkspace
-        :files="files"
-        :active-file="activeFile"
-        :diagnostics="diagnostics"
-        :output="output"
-        :activity="compiler.activity.value"
-        :request-completions="requestCompletions"
-        @select-file="workspace.selectFile"
-        @create-file="workspace.createFile"
-        @update-file="handleFileUpdate"
-        @delete-file="workspace.deleteFile"
-      />
+      <main class="editor-column">
+        <FileTabs :files="fileNames" :active="activeFile" @select="workspace.selectFile" @create="workspace.createFile" @delete="workspace.deleteFile" />
+        <CodeEditor ref="editor" :document="files[activeFile] ?? ''" :complete="complete" @change="workspace.updateFile(activeFile, $event)" />
+        <CompilerConsole :diagnostics="diagnostics" :output="output" :activity="activity" @reveal="revealDiagnostic" />
+      </main>
 
-      <RuntimePanel
-        v-if="!compiler.toolchainReady.value"
-        :status="compiler.status.value"
-        :error="compiler.loadError.value"
-        :progress="compiler.loadingProgress.value"
-        @retry="compiler.preload"
-      />
+      <RuntimePanel v-if="!toolchainReady" :status="status" :error="loadError" :progress="loadingProgress" @retry="compiler.preload" />
       <TimelinePanel v-else />
     </div>
   </div>
@@ -84,10 +72,24 @@ function runCurrentFile() {
   height: calc(100% - var(--topbar-h));
   overflow: hidden;
 }
+.editor-column {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg-1);
+}
 
 @media (max-width: 800px) {
   .body {
     flex-direction: column;
+  }
+  .editor-column {
+    flex: 1 1 58%;
+    min-height: 360px;
   }
 }
 </style>
