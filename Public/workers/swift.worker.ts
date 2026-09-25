@@ -419,6 +419,7 @@ const swiftCompiler = memoize(async () => {
             const bytes = new TextEncoder().encode(content);
             const clampedOffset = Math.max(0, Math.min(offset, bytes.length));
             content = new TextDecoder().decode(bytes.subarray(0, clampedOffset)) + `#^${COMPLETION_TOKEN}^#` + new TextDecoder().decode(bytes.subarray(clampedOffset));
+            console.log(`[swift-ide-test] source (${name}):\n${content}`);
           }
           buildDir.set(name, new File(new TextEncoder().encode(content)));
         }
