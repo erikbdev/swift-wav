@@ -5,34 +5,36 @@ import { swiftEditorExtensions } from "./swiftEditor";
 import { useCodeMirror } from "./useCodeMirror";
 
 const props = defineProps<{
+  fileId: string;
   document: string;
   complete: CompletionProvider;
 }>();
 
 const emit = defineEmits<{
-  change: [document: string];
+  change: [fileId: string, document: string];
 }>();
 
 const host = ref<HTMLElement | null>(null);
 const editor = useCodeMirror({
   host,
+  getFileId: () => props.fileId,
   getDocument: () => props.document,
   extensions: () =>
     swiftEditorExtensions({
       complete: (position) => props.complete(position),
-      onChange: (document) => emit("change", document),
+      onChange: (document) => emit("change", props.fileId, document),
     }),
 });
 
-// Follow outside changes, such as switching files.
+// Switching files restores that file's undo history and selection.
 watch(
-  () => props.document,
-  (document) => {
-    if (document !== editor.getDocument()) editor.setDocument(document);
+  () => [props.fileId, props.document] as const,
+  ([fileId, document]) => {
+    editor.showFile(fileId, document);
   },
 );
 
-defineExpose({ reveal: editor.reveal });
+defineExpose({ reveal: editor.reveal, forgetFile: editor.forgetFile });
 </script>
 
 <template>

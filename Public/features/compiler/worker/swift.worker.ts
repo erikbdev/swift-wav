@@ -4,13 +4,13 @@
 
 import type { WorkerRequest, WorkerResponse } from "../types";
 import { createSwiftCompiler } from "./swiftCompiler";
-import { createToolchain } from "./toolchain";
+import { fetchToolchains } from "./toolchain";
 
 function post(message: WorkerResponse): void {
   self.postMessage(message);
 }
 
-const swiftCompiler = createSwiftCompiler(createToolchain((progress) => post({ id: -1, type: "preload", progress })));
+const swiftCompiler = createSwiftCompiler(fetchToolchains((progress) => post({ id: -1, type: "preload", progress })));
 
 /**
  * The newest completion request's id. Each swift-ide-test run blocks the

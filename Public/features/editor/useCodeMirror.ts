@@ -4,6 +4,7 @@ import { EditorView } from "@codemirror/view";
 
 interface UseCodeMirrorOptions {
   host: Ref<HTMLElement | null>;
+  getFileId: () => string;
   getDocument: () => string;
   extensions: () => Extension[];
 }
@@ -16,6 +17,12 @@ interface UseCodeMirrorOptions {
  */
 export function useCodeMirror(options: UseCodeMirrorOptions) {
   let view: EditorView | null = null;
+  let currentFileId: string | null = null;
+  const states = new Map<string, EditorState>();
+
+  function createState(document: string) {
+    return EditorState.create({ doc: document, extensions: options.extensions() });
+  }
 
   function destroy() {
     if (!view) return;
@@ -37,21 +44,29 @@ export function useCodeMirror(options: UseCodeMirrorOptions) {
     destroy();
     options.host.value.replaceChildren();
 
-    const state = EditorState.create({ doc: options.getDocument(), extensions: options.extensions() });
+    currentFileId = options.getFileId();
+    const state = createState(options.getDocument());
     view = new EditorView({ state, parent: options.host.value });
   }
 
-  function setDocument(document: string) {
+  function showFile(fileId: string, document: string) {
     if (!view) return;
-    if (view.state.doc.toString() === document) return;
+    if (fileId === currentFileId) {
+      if (view.state.doc.toString() !== document) view.setState(createState(document));
+      return;
+    }
 
-    view.dispatch({
-      changes: { from: 0, to: view.state.doc.length, insert: document },
-    });
+    if (currentFileId) states.set(currentFileId, view.state);
+    currentFileId = fileId;
+
+    const saved = states.get(fileId);
+    const state = saved?.doc.toString() === document ? saved : createState(document);
+    view.setState(state);
   }
 
-  function getDocument(): string {
-    return view?.state.doc.toString() ?? "";
+  function forgetFile(fileId: string) {
+    states.delete(fileId);
+    if (currentFileId === fileId) currentFileId = null;
   }
 
   function reveal(problem: { line: number | null; column: number | null }) {
@@ -67,5 +82,5 @@ export function useCodeMirror(options: UseCodeMirrorOptions) {
   onMounted(mount);
   onBeforeUnmount(destroy);
 
-  return { setDocument, getDocument, reveal };
+  return { showFile, forgetFile, reveal };
 }

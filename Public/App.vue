@@ -31,6 +31,11 @@ function run() {
   void compiler.run(workspace.snapshot());
 }
 
+function deleteFile(filename: string) {
+  codeEditor.value?.forgetFile(filename);
+  workspace.deleteFile(filename);
+}
+
 async function revealDiagnostic(diagnostic: Diagnostic) {
   const target = fileNames.value.find((name) => diagnostic.file?.endsWith(name));
   if (target) workspace.selectFile(target);
@@ -45,8 +50,8 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
 
     <div class="body">
       <main class="editor-column">
-        <FileTabs :files="fileNames" :active="activeFile" @select="workspace.selectFile" @create="workspace.createFile" @delete="workspace.deleteFile" />
-        <CodeEditor ref="editor" :document="files[activeFile] ?? ''" :complete="complete" @change="workspace.updateFile(activeFile, $event)" />
+        <FileTabs :files="fileNames" :active="activeFile" @select="workspace.selectFile" @create="workspace.createFile" @delete="deleteFile" />
+        <CodeEditor ref="editor" :file-id="activeFile" :document="files[activeFile] ?? ''" :complete="complete" @change="workspace.updateFile" />
         <CompilerConsole :diagnostics="diagnostics" :output="output" :activity="activity" @reveal="revealDiagnostic" />
       </main>
 
