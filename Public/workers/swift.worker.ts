@@ -285,7 +285,7 @@ const swiftCompiler = memoize(async () => {
             "-no-color-diagnostics",
             ...[...buildDir.keys()].map((name) => `/build/${name}`),
           ],
-          [sysrootPreopen(), moduleCachePreopen(), swiftwavPreopen(), buildPreopen()],
+          [buildPreopen(), sysrootPreopen(), moduleCachePreopen(), swiftwavPreopen()],
         );
         return { exitCode: result.exitCode, diagnostics: parseDiagnostics(result.stderr) };
       } catch (e) {
@@ -321,7 +321,7 @@ const swiftCompiler = memoize(async () => {
             "-o",
             "/build/main.o",
           ],
-          [sysrootPreopen(), moduleCachePreopen(), swiftwavPreopen(), buildPreopen()],
+          [buildPreopen(), sysrootPreopen(), moduleCachePreopen(), swiftwavPreopen()],
         );
         console.log("[swift-frontend] stdout:", frontendResult.stdout, "stderr:", frontendResult.stderr);
 
@@ -373,7 +373,7 @@ const swiftCompiler = memoize(async () => {
           "/build/main.wasm",
         ];
 
-        const linkResult = await runWasiCommand(linker, linkerArgv, [sysrootPreopen(), swiftwavPreopen(), buildPreopen()]);
+        const linkResult = await runWasiCommand(linker, linkerArgv, [buildPreopen(), sysrootPreopen(), swiftwavPreopen()]);
         console.log("[wasm-ld] stdout:", linkResult.stdout, "stderr:", linkResult.stderr);
         const programFile = buildDir.get("main.wasm");
         if (linkResult.exitCode !== 0 || !(programFile instanceof File)) {
@@ -405,8 +405,9 @@ const swiftCompiler = memoize(async () => {
       }
     },
 
-    // Runs swift-ide-test's `-code-completion` at `offset` (a UTF-8 byte
-    // offset into `files[primaryFile]`), with every other workspace file
+    // Runs swift-ide-test's `-code-completion` at `offset` (a UTF-16 code
+    // unit offset into `files[primaryFile]`, as CodeMirror positions are),
+    // normally the start of the identifier being typed, with every other workspace file
     // loaded alongside it so completion sees declarations from the whole
     // module, and returns the parsed completion list.
     async autocomplete(files: SourceFiles, activeFile: string, offset: number) {
@@ -416,9 +417,8 @@ const swiftCompiler = memoize(async () => {
         const buildDir = new Map();
         for (let [name, content] of Object.entries(files)) {
           if (name === activeFile) {
-            const bytes = new TextEncoder().encode(content);
-            const clampedOffset = Math.max(0, Math.min(offset, bytes.length));
-            content = new TextDecoder().decode(bytes.subarray(0, clampedOffset)) + `#^${COMPLETION_TOKEN}^#` + new TextDecoder().decode(bytes.subarray(clampedOffset));
+            const clampedOffset = Math.max(0, Math.min(offset, content.length));
+            content = content.slice(0, clampedOffset) + `#^${COMPLETION_TOKEN}^#` + content.slice(clampedOffset);
             console.log(`[swift-ide-test] source (${name}):\n${content}`);
           }
           buildDir.set(name, new File(new TextEncoder().encode(content)));
@@ -440,7 +440,7 @@ const swiftCompiler = memoize(async () => {
           ...commonFrontendArgs,
         ];
 
-        const result = await runWasiCommand(ideTest, argv, [sysrootPreopen(), moduleCachePreopen(), swiftwavPreopen(), buildPreopen()]);
+        const result = await runWasiCommand(ideTest, argv, [buildPreopen(), sysrootPreopen(), moduleCachePreopen(), swiftwavPreopen()]);
         console.log("[swift-ide-test] stdout:", result.stdout, "stderr:", result.stderr);
         return {
           items: parseCompletionResults(result.stdout),
