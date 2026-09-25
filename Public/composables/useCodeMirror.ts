@@ -3,7 +3,7 @@ import { EditorState } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection, dropCursor, highlightSpecialChars } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { HighlightStyle, syntaxHighlighting, syntaxTree } from "@codemirror/language";
-import { autocompletion, type CompletionContext, type CompletionResult } from "@codemirror/autocomplete";
+import { autocompletion, snippet, type Completion, type CompletionContext, type CompletionResult } from "@codemirror/autocomplete";
 import { swift } from "@fazelstudio/codemirror-lang-swift";
 import { tags as t } from "@lezer/highlight";
 import type { CompletionItem } from "../workers/swift.worker";
@@ -31,17 +31,73 @@ const TRIGGER_CHARACTERS = new Set([".", "(", "@"]);
 const OPEN_INTERPOLATION = /\\#*\((?:[^()]|\([^()]*\))*$/;
 
 /**
+ * Converts compiler source text with Xcode-style editor placeholders
+ * (`<#T##display##type#>`, `<#code#>`) into a CodeMirror snippet template.
+ * Each placeholder becomes a numbered field showing its display text, so
+ * placeholders with the same text (e.g. two `Int` arguments) aren't linked.
+ */
+function snippetTemplate(sourceText: string): string {
+  let field = 0;
+  return sourceText
+    .split(/(<#.*?#>)/)
+    .map((part, index) => {
+      // Odd parts are placeholders; braces are the only template syntax
+      // that needs escaping in plain text, and aren't allowed in fields. A
+      // tab after `{` indents a block's body one level (e.g. `if`'s `code`).
+      if (index % 2 === 0) return part.replace(/[{}]/g, "\\$&").replace(/\\\{\n(?!\t)/g, "\\{\n\t");
+      const display = part.slice(2, -2).replace(/^T##/, "").split("##")[0]!;
+      return `\${${++field}:${display.replace(/[{}]/g, "")}}`;
+    })
+    .join("");
+}
+
+/**
+ * The CodeMirror option for a compiler completion item. `index` is the
+ * item's position in the compiler's list, and `afterPound` whether a `#` is
+ * typed right before the completion point.
+ */
+function completionOption(item: CompletionItem, index: number, afterPound: boolean): Completion {
+  // `#if`, `#warning`, etc. are listed with their `#`; when it's already
+  // typed, match without it and replace it on insertion.
+  const replacesPound = afterPound && item.name.startsWith("#");
+  return {
+    // Match against the base name so argument labels don't produce spurious
+    // fuzzy matches, and rank by the compiler's semantic score on top of
+    // CodeMirror's match score, like SourceKit-LSP multiplies the two. A
+    // score of 2 (or 0.5) adds (or subtracts) 50. The tiny per-item offset
+    // keeps overloads (same name, type, and result) from being merged by
+    // CodeMirror, and keeps them in the compiler's order.
+    label: replacesPound ? item.name.slice(1) : item.name,
+    displayLabel: item.label,
+    detail: item.detail,
+    type: item.kind,
+    boost: Math.max(-99, Math.min(99, Math.round(50 * Math.log2(item.score)))) - index * 1e-6,
+    // Insert the full call with its arguments as placeholder fields,
+    // selecting the first; Tab and Shift-Tab move between them. `erase` also
+    // replaces text before the completion point, e.g. `.` → `?.`, and an
+    // argument list that closes its call replaces a typed `)`.
+    apply: (view, completion, from, to) => {
+      const end = item.closesCall && view.state.sliceDoc(to, to + 1) === ")" ? to + 1 : to;
+      snippet(snippetTemplate(item.sourceText))(view, completion, from - item.erase - (replacesPound ? 1 : 0), end);
+    },
+  };
+}
+
+/**
  * Creates the CodeMirror completion source for Swift.
  *
  * Like SourceKit-LSP, completions are requested at the start of the
  * identifier being typed (or right after a trigger character) rather than at
  * the cursor, so the compiler returns everything valid at that point.
  * CodeMirror then filters that list by prefix and fuzzy match on every
- * keystroke without going back to the compiler. The last response is cached
+ * keystroke without going back to the compiler. The last request is cached
  * by completion point, so retyping a word doesn't hit the compiler again.
  */
 function swiftCompletionSource(requestCompletions: (position: number) => Promise<CompletionItem[]>) {
-  let cache: { key: string; items: CompletionItem[] } | null = null;
+  // The pending or settled request for the last completion point, so a
+  // repeat request for it (even while it's running) doesn't re-run the
+  // compiler. Failed requests aren't kept.
+  let cache: { key: string; items: Promise<CompletionItem[]> } | null = null;
 
   return async (context: CompletionContext): Promise<CompletionResult | null> => {
     const { state, pos } = context;
@@ -66,34 +122,24 @@ function swiftCompletionSource(requestCompletions: (position: number) => Promise
     // determines what the compiler returns.
     const key = `${from}\u0000${state.sliceDoc(0, from)}\u0000${state.sliceDoc(pos)}`;
     if (cache?.key !== key) {
-      try {
-        cache = { key, items: await requestCompletions(from) };
-      } catch {
-        return null;
-      }
+      const pending = requestCompletions(from);
+      cache = { key, items: pending };
+      pending.catch(() => {
+        if (cache?.items === pending) cache = null;
+      });
     }
-    const { items } = cache;
+    let items: CompletionItem[];
+    try {
+      items = await cache.items;
+    } catch {
+      return null;
+    }
     if (!items.length) return null;
 
-    // `#if`, `#warning`, etc. are listed with their `#`; drop it when the
-    // `#` is already typed, since the completion replaces from after it.
     const afterPound = state.sliceDoc(from - 1, from) === "#";
-
     return {
       from,
-      options: items.map((item, index) => ({
-        // Match against the base name so argument labels don't produce
-        // spurious fuzzy matches, and rank by the compiler's semantic score
-        // on top of CodeMirror's match score, like SourceKit-LSP multiplies
-        // the two. A score of 2 (or 0.5) adds (or subtracts) 50. The tiny
-        // per-item offset keeps overloads (same name, type, and result) from
-        // being merged by CodeMirror, and keeps them in the compiler's order.
-        label: afterPound && item.name.startsWith("#") ? item.name.slice(1) : item.name,
-        displayLabel: item.label,
-        detail: item.detail,
-        type: item.kind,
-        boost: Math.max(-99, Math.min(99, Math.round(50 * Math.log2(item.score)))) - index * 1e-6,
-      })),
+      options: items.map((item, index) => completionOption(item, index, afterPound)),
       getMatch: (_completion, matched) => matched ?? [],
       validFor: /^[A-Za-z_][A-Za-z0-9_]*$/,
     };
@@ -196,6 +242,13 @@ export function useCodeMirror(options: UseCodeMirrorOptions) {
               border: "none",
             },
             ".cm-scroller": { fontFamily: "var(--mono)" },
+            // Argument placeholders inserted by completions, drawn as tokens
+            // like Xcode's.
+            ".cm-snippetField": {
+              backgroundColor: "rgba(74, 163, 232, 0.18)",
+              border: "1px solid rgba(74, 163, 232, 0.35)",
+              borderRadius: "4px",
+            },
           },
           { dark: true },
         ),

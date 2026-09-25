@@ -179,6 +179,7 @@ export function useSwiftCompiler() {
   async function autocomplete(workspace: WorkspaceSnapshot, offset: number) {
     if (!workspace.primaryFile) return [];
     const result = await request("complete", { files: workspace.files, primaryFile: workspace.primaryFile, offset });
+    if (result.error) throw result.error;
     return result.items ?? [];
   }
 

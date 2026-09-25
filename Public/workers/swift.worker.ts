@@ -16,20 +16,11 @@ import { Directory, File, PreopenDirectory } from "@bjorn3/browser_wasi_shim";
 import { untar } from "./tar";
 import { runWasiCommand } from "./wasi-run";
 import { memoize } from "../utils/memoize";
+import { parseCompletionResults, type CompletionItem } from "./completion";
+
+export type { CompletionItem };
 
 export type SourceFiles = Record<string, string>;
-
-export type CompletionItem = {
-  /** The base name completions are matched against, e.g. "print" for "print(_:)". */
-  name: string;
-  /** The readable signature shown in the list, e.g. "print(items: Any...)". */
-  label: string;
-  /** The result type, e.g. "Void". */
-  detail: string;
-  kind: string;
-  /** SourceKit-LSP-style semantic score; 1 is neutral, higher ranks first. */
-  score: number;
-};
 
 export type Diagnostic = {
   file: string | null;
@@ -189,135 +180,9 @@ function parseDiagnostics(lines: string[]): Diagnostic[] {
   return diagnostics;
 }
 
-// ---------- Code completion parsing ----------
+// ---------- Code completion ----------
 
 const COMPLETION_TOKEN = "COMPLETE";
-
-/**
- * Parses swift-ide-test's `-code-completion` stdout. Each result line looks
- * like:
- *   Decl[FreeFunction]/OtherModule[Swift]/IsSystem: print({#(items): Any...#})[#Void#]; name=print(:)
- * i.e. a tag of `/`-separated flags (see CodeCompletionResult::printPrefix),
- * the completion string, then `; key=value` fields of which `name` always
- * comes first (see swift-ide-test's printCodeCompletionResultsImpl).
- */
-function parseCompletionResults(stdoutLines: string[]): CompletionItem[] {
-  if (!stdoutLines[0]?.startsWith("found code completion token")) {
-    return [];
-  }
-  const parseLines = stdoutLines.slice(1);
-
-  const items: CompletionItem[] = [];
-  const seen = new Set<string>();
-  for (const line of parseLines) {
-    if (line.startsWith("Begin completions")) {
-      continue;
-    } else if (line.startsWith("End completions")) {
-      break;
-    }
-    const match = /^(\S+): +(.*?); name=(.*?)(?:; (?:sourcetext|briefcomment|xmlcomment|rawcomment|diagnostics)=.*)?$/.exec(line);
-    if (!match) continue;
-    const [, tag, completion, name] = match as unknown as [string, string, string, string];
-    // The result type is the trailing `[#Type#]`; the type itself may
-    // contain brackets, e.g. `[#[Int]#]`.
-    const typeStart = completion.endsWith("#]") ? completion.lastIndexOf("[#") : -1;
-    const label = readableCompletion(typeStart === -1 ? completion : completion.slice(0, typeStart));
-    const detail = typeStart === -1 ? "" : readableCompletion(completion.slice(typeStart + 2, -2));
-    if (!name || seen.has(`${label}\u0000${detail}`)) continue;
-    seen.add(`${label}\u0000${detail}`);
-    items.push({
-      name: (name.startsWith("(") ? name : name.split("(")[0]) || name,
-      label,
-      detail,
-      kind: completionKind(tag),
-      score: semanticScore(tag),
-    });
-  }
-  return items;
-}
-
-/**
- * Turns swift-ide-test's completion string markup into readable text:
- * `{#(items): Any...#}` placeholders become `items: Any...`, a `##`-separated
- * closure type is dropped, `[' throws']` annotations become ` throws`, and
- * `[#Type#]` markers are unwrapped.
- */
-function readableCompletion(text: string): string {
-  return text
-    .replace(/##.*?#\}/g, "#}")
-    .replace(/\{#\((\w+)\)/g, "{#$1")
-    .replace(/\{#|#\}|\[#|#\]/g, "")
-    .replace(/\['(.*?)'\]/g, "$1");
-}
-
-/** Maps a result's tag ("Decl[InstanceMethod]/...", "Keyword[func]/...") to a CodeMirror completion type, used for icons. */
-function completionKind(tag: string): string {
-  if (tag.startsWith("Keyword")) return "keyword";
-  if (tag.startsWith("Literal")) return "constant";
-  if (tag.startsWith("Decl[Module]")) return "namespace";
-  if (/^Decl\[(Class|Actor)\]/.test(tag)) return "class";
-  if (/^Decl\[(Struct|Enum|Protocol|TypeAlias|AssociatedType|GenericTypeParam|Macro)\]/.test(tag)) return "type";
-  if (tag.startsWith("Decl[EnumElement]")) return "enum";
-  if (/^Decl\[(InstanceMethod|StaticMethod|FreeFunction|Constructor|Destructor|Subscript|\w*OperatorFunction)\]/.test(tag)) return "function";
-  if (/^Decl\[(InstanceVar|StaticVar|LocalVar|GlobalVar)\]/.test(tag)) return "variable";
-  return "text";
-}
-
-/**
- * Scores a result from its tag's flags the way SourceKit-LSP does
- * (CompletionScoring's SemanticClassification): the product of factors for
- * the kind of symbol, how close its scope is, whether its type fits the
- * context, flair, and deprecation. swift-ide-test prints no import depth or
- * popularity data, so those factors are left neutral.
- */
-function semanticScore(tag: string): number {
-  const flags = tag.split("/");
-  const [kind = "", context = ""] = flags;
-  const has = (flag: string) => flags.includes(flag);
-  const flair = /\/Flair\[([^\]]*)\]/.exec(tag)?.[1]?.split(",") ?? [];
-
-  let score = 1;
-
-  // Completion kind.
-  const isVariable = /^Decl\[(InstanceVar|StaticVar|LocalVar|GlobalVar)\]/.test(kind);
-  const isEnumCase = kind === "Decl[EnumElement]";
-  if (flair.includes("ArgLabels")) score *= 2;
-  else if (isEnumCase) score *= 1.1;
-  else if (isVariable) score *= 1.075;
-  else if (kind === "Decl[Constructor]") score *= 1.02;
-  else if (kind === "Decl[Module]") score *= 0.925;
-  else if (kind.startsWith("Decl")) score *= 1.025;
-
-  // Scope and module proximity.
-  const isGlobal = context === "CurrModule" || context.startsWith("OtherModule");
-  if (context === "Local") score *= 1.5 * 1.05;
-  else if (context === "CurrNominal") score *= 1.35 * 1.05;
-  else if (context === "Super") score *= 1.325;
-  else if (context === "OutNominal") score *= 1.325 * 1.05;
-  else if (context === "CurrModule") score *= 0.95 * 1.05;
-  else if (context.startsWith("OtherModule")) score *= 0.95 * 1.0125;
-  if (isGlobal && (isVariable || isEnumCase)) score *= 0.75;
-
-  // Project symbols slightly ahead of SDK ones.
-  if (has("IsSystem")) score *= 0.995;
-
-  // Type compatibility with the expected type.
-  if (has("TypeRelation[Convertible]")) score *= 1.3;
-  else if (has("TypeRelation[Invalid]")) score *= 0.3;
-
-  // Flair.
-  if (flair.includes("ExprSpecific")) score *= 1.5;
-  if (flair.includes("SuperChain")) score *= 1.5;
-  if (flair.includes("CommonKeyword")) score *= 1.25;
-  if (flair.includes("RareKeyword")) score *= 0.75;
-  if (flair.includes("RareType")) score *= 0.75;
-  if (flair.includes("ExprAtFileScope")) score *= 0.125;
-
-  // Deprecated, used in its own definition, and the like.
-  if (has("NotRecommended")) score *= 0.5;
-
-  return score;
-}
 
 const swiftCompiler = memoize(async () => {
   const [frontend, linker, sysroot, swiftwav] = await Promise.all([frontendModule(), linkerModule(), sysrootModule(), libSwiftWAVModule()]);
@@ -508,6 +373,7 @@ const swiftCompiler = memoize(async () => {
           "-source-filename",
           `/build/${activeFile}`,
           `-code-completion-token=${COMPLETION_TOKEN}`,
+          "-code-completion-sourcetext",
           ...(Object.keys(files).includes("main.swift") ? [] : ["-parse-as-library"]),
           ...[...buildDir.keys()].flatMap((n) => (n === activeFile ? [] : [`/build/${n}`])),
           ...commonFrontendArgs,
@@ -527,6 +393,13 @@ const swiftCompiler = memoize(async () => {
   };
 });
 
+/**
+ * The newest completion request's id. Each swift-ide-test run blocks the
+ * worker for seconds while the user keeps typing, so completion requests
+ * queue up behind it; only the newest one's result is still wanted.
+ */
+let latestCompletionId = -1;
+
 self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
   const msg = event.data;
 
@@ -543,8 +416,16 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
     }
 
     case "complete": {
+      latestCompletionId = msg.id;
       try {
         const compiler = await swiftCompiler();
+        // Let any messages already queued behind the previous run arrive (a
+        // timer fires after them), then skip this request if a newer one did.
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        if (msg.id !== latestCompletionId) {
+          post({ id: msg.id, type: msg.type, error: new Error("Superseded by a newer completion request") });
+          return;
+        }
         const { items, diagnostics } = await compiler.autocomplete(msg.files, msg.primaryFile, msg.offset);
         post({ id: msg.id, type: msg.type, items, diagnostics });
       } catch (e) {
