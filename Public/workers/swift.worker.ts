@@ -434,6 +434,7 @@ const swiftCompiler = memoize(async () => {
           "-source-filename",
           `/build/${activeFile}`,
           `-code-completion-token=${COMPLETION_TOKEN}`,
+          ...(Object.keys(files).includes("main.swift") ? [] : ["-parse-as-library"]),
           ...[...buildDir.keys()].flatMap((n) => (n === activeFile ? [] : [`/build/${n}`])),
           ...commonFrontendArgs,
         ];
