@@ -10,6 +10,13 @@ import type { CompletionItem } from "../workers/swift.worker";
 
 type SyntaxNode = ReturnType<typeof syntaxTree>["topNode"];
 
+interface UseCodeMirrorOptions {
+  host: Ref<HTMLElement | null>;
+  getDocument: () => string;
+  onChange: (value: string) => void;
+  requestCompletions: (position: number) => Promise<CompletionItem[]>;
+}
+
 const IDENTIFIER_BEFORE = /[A-Za-z_][A-Za-z0-9_]*/;
 
 /**
@@ -68,34 +75,29 @@ function swiftCompletionSource(requestCompletions: (position: number) => Promise
     const { items } = cache;
     if (!items.length) return null;
 
+    // `#if`, `#warning`, etc. are listed with their `#`; drop it when the
+    // `#` is already typed, since the completion replaces from after it.
+    const afterPound = state.sliceDoc(from - 1, from) === "#";
+
     return {
       from,
-      options: items.map((item, index) => {
-        // Match against the base name ("foo" for "foo(x:)") so argument
-        // labels don't produce spurious fuzzy matches, and keep the
-        // compiler's own ranking among equally good matches. The boost stays
-        // under 50 so it never outweighs a better kind of match.
-        const name = item.label.split("(")[0] || item.label;
-        return {
-          label: name,
-          displayLabel: name === item.label ? undefined : item.label,
-          detail: item.detail,
-          type: item.kind,
-          boost: 49 - (98 * index) / items.length,
-        };
-      }),
-      // `label` is a prefix of `displayLabel`, so the matched ranges carry over.
+      options: items.map((item, index) => ({
+        // Match against the base name so argument labels don't produce
+        // spurious fuzzy matches, and rank by the compiler's semantic score
+        // on top of CodeMirror's match score, like SourceKit-LSP multiplies
+        // the two. A score of 2 (or 0.5) adds (or subtracts) 50. The tiny
+        // per-item offset keeps overloads (same name, type, and result) from
+        // being merged by CodeMirror, and keeps them in the compiler's order.
+        label: afterPound && item.name.startsWith("#") ? item.name.slice(1) : item.name,
+        displayLabel: item.label,
+        detail: item.detail,
+        type: item.kind,
+        boost: Math.max(-99, Math.min(99, Math.round(50 * Math.log2(item.score)))) - index * 1e-6,
+      })),
       getMatch: (_completion, matched) => matched ?? [],
       validFor: /^[A-Za-z_][A-Za-z0-9_]*$/,
     };
   };
-}
-
-interface UseCodeMirrorOptions {
-  host: Ref<HTMLElement | null>;
-  getDocument: () => string;
-  onChange: (value: string) => void;
-  requestCompletions: (position: number) => Promise<CompletionItem[]>;
 }
 
 /**

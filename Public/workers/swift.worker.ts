@@ -20,9 +20,15 @@ import { memoize } from "../utils/memoize";
 export type SourceFiles = Record<string, string>;
 
 export type CompletionItem = {
+  /** The base name completions are matched against, e.g. "print" for "print(_:)". */
+  name: string;
+  /** The readable signature shown in the list, e.g. "print(items: Any...)". */
   label: string;
+  /** The result type, e.g. "Void". */
   detail: string;
   kind: string;
+  /** SourceKit-LSP-style semantic score; 1 is neutral, higher ranks first. */
+  score: number;
 };
 
 export type Diagnostic = {
@@ -190,60 +196,127 @@ const COMPLETION_TOKEN = "COMPLETE";
 /**
  * Parses swift-ide-test's `-code-completion` stdout. Each result line looks
  * like:
- *   Decl[InstanceMethod]/CurrModule:   foo([#(x): Int#])[#Void#]; name=foo(:)
- * padded so the description starts at column 36 (see
- * CodeCompletionResult::printPrefix). The description block runs up to the
- * first "; name=" field, which is always emitted (and always last, since
- * comments/sourcetext aren't requested here).
+ *   Decl[FreeFunction]/OtherModule[Swift]/IsSystem: print({#(items): Any...#})[#Void#]; name=print(:)
+ * i.e. a tag of `/`-separated flags (see CodeCompletionResult::printPrefix),
+ * the completion string, then `; key=value` fields of which `name` always
+ * comes first (see swift-ide-test's printCodeCompletionResultsImpl).
  */
 function parseCompletionResults(stdoutLines: string[]): CompletionItem[] {
-  // Maps a "Decl[InstanceMethod]", "Keyword[func]", "Pattern/Local", etc.
-  // kind tag (see CodeCompletionResult::printPrefix in the Swift compiler)
-  // to a coarse CodeMirror-style completion type, used for icons/filtering.
-  function completionKindFor(tag: string): string {
-    if (tag.startsWith("Keyword")) return "keyword";
-    if (tag.startsWith("Decl[Module]")) return "namespace";
-    if (/\[(Class|Actor)\]/.test(tag)) return "class";
-    if (/\[(Struct|Enum|Protocol|TypeAlias|AssociatedType|GenericTypeParam)\]/.test(tag)) return "type";
-    if (tag.includes("[EnumElement]")) return "enum";
-    if (/\[(InstanceMethod|StaticMethod|FreeFunction|Constructor|Destructor|.*OperatorFunction)\]/.test(tag)) return "function";
-    if (/\[(InstanceVar|StaticVar|LocalVar|GlobalVar)\]/.test(tag)) return "variable";
-    return "text";
+  if (!stdoutLines[0]?.startsWith("found code completion token")) {
+    return [];
   }
-
-  // Turns a completion string like "foo([#(x): Int#])[#Void#]" into readable
-  // text by dropping swift-ide-test's placeholder/result-type delimiters
-  // ("[#" ... "#]"), giving "foo((x): Int)Void".
-  function stripCompletionMarkup(text: string): string {
-    return text.replace(/\[#/g, "").replace(/#\]/g, "");
-  }
-
-  const text = stdoutLines.join("\n");
-  const beginIdx = text.indexOf("Begin completions");
-  if (beginIdx === -1) return [];
-  const endIdx = text.indexOf("End completions", beginIdx);
-  const block = text.slice(beginIdx, endIdx === -1 ? undefined : endIdx);
+  const parseLines = stdoutLines.slice(1);
 
   const items: CompletionItem[] = [];
   const seen = new Set<string>();
-  for (const line of block.split("\n").slice(1)) {
-    if (!line.trim()) continue;
-    const sepIdx = line.indexOf(": ");
-    if (sepIdx === -1) continue;
-    const tag = line.slice(0, sepIdx);
-    const rest = line.slice(sepIdx + 2).replace(/^ +/, "");
-    const nameIdx = rest.lastIndexOf("; name=");
-    const completionText = nameIdx === -1 ? rest : rest.slice(0, nameIdx);
-    const name = nameIdx === -1 ? completionText : rest.slice(nameIdx + "; name=".length).trim();
-    if (!name || seen.has(name)) continue;
-    seen.add(name);
+  for (const line of parseLines) {
+    if (line.startsWith("Begin completions")) {
+      continue;
+    } else if (line.startsWith("End completions")) {
+      break;
+    }
+    const match = /^(\S+): +(.*?); name=(.*?)(?:; (?:sourcetext|briefcomment|xmlcomment|rawcomment|diagnostics)=.*)?$/.exec(line);
+    if (!match) continue;
+    const [, tag, completion, name] = match as unknown as [string, string, string, string];
+    // The result type is the trailing `[#Type#]`; the type itself may
+    // contain brackets, e.g. `[#[Int]#]`.
+    const typeStart = completion.endsWith("#]") ? completion.lastIndexOf("[#") : -1;
+    const label = readableCompletion(typeStart === -1 ? completion : completion.slice(0, typeStart));
+    const detail = typeStart === -1 ? "" : readableCompletion(completion.slice(typeStart + 2, -2));
+    if (!name || seen.has(`${label}\u0000${detail}`)) continue;
+    seen.add(`${label}\u0000${detail}`);
     items.push({
-      label: name,
-      detail: stripCompletionMarkup(completionText),
-      kind: completionKindFor(tag),
+      name: (name.startsWith("(") ? name : name.split("(")[0]) || name,
+      label,
+      detail,
+      kind: completionKind(tag),
+      score: semanticScore(tag),
     });
   }
   return items;
+}
+
+/**
+ * Turns swift-ide-test's completion string markup into readable text:
+ * `{#(items): Any...#}` placeholders become `items: Any...`, a `##`-separated
+ * closure type is dropped, `[' throws']` annotations become ` throws`, and
+ * `[#Type#]` markers are unwrapped.
+ */
+function readableCompletion(text: string): string {
+  return text
+    .replace(/##.*?#\}/g, "#}")
+    .replace(/\{#\((\w+)\)/g, "{#$1")
+    .replace(/\{#|#\}|\[#|#\]/g, "")
+    .replace(/\['(.*?)'\]/g, "$1");
+}
+
+/** Maps a result's tag ("Decl[InstanceMethod]/...", "Keyword[func]/...") to a CodeMirror completion type, used for icons. */
+function completionKind(tag: string): string {
+  if (tag.startsWith("Keyword")) return "keyword";
+  if (tag.startsWith("Literal")) return "constant";
+  if (tag.startsWith("Decl[Module]")) return "namespace";
+  if (/^Decl\[(Class|Actor)\]/.test(tag)) return "class";
+  if (/^Decl\[(Struct|Enum|Protocol|TypeAlias|AssociatedType|GenericTypeParam|Macro)\]/.test(tag)) return "type";
+  if (tag.startsWith("Decl[EnumElement]")) return "enum";
+  if (/^Decl\[(InstanceMethod|StaticMethod|FreeFunction|Constructor|Destructor|Subscript|\w*OperatorFunction)\]/.test(tag)) return "function";
+  if (/^Decl\[(InstanceVar|StaticVar|LocalVar|GlobalVar)\]/.test(tag)) return "variable";
+  return "text";
+}
+
+/**
+ * Scores a result from its tag's flags the way SourceKit-LSP does
+ * (CompletionScoring's SemanticClassification): the product of factors for
+ * the kind of symbol, how close its scope is, whether its type fits the
+ * context, flair, and deprecation. swift-ide-test prints no import depth or
+ * popularity data, so those factors are left neutral.
+ */
+function semanticScore(tag: string): number {
+  const flags = tag.split("/");
+  const [kind = "", context = ""] = flags;
+  const has = (flag: string) => flags.includes(flag);
+  const flair = /\/Flair\[([^\]]*)\]/.exec(tag)?.[1]?.split(",") ?? [];
+
+  let score = 1;
+
+  // Completion kind.
+  const isVariable = /^Decl\[(InstanceVar|StaticVar|LocalVar|GlobalVar)\]/.test(kind);
+  const isEnumCase = kind === "Decl[EnumElement]";
+  if (flair.includes("ArgLabels")) score *= 2;
+  else if (isEnumCase) score *= 1.1;
+  else if (isVariable) score *= 1.075;
+  else if (kind === "Decl[Constructor]") score *= 1.02;
+  else if (kind === "Decl[Module]") score *= 0.925;
+  else if (kind.startsWith("Decl")) score *= 1.025;
+
+  // Scope and module proximity.
+  const isGlobal = context === "CurrModule" || context.startsWith("OtherModule");
+  if (context === "Local") score *= 1.5 * 1.05;
+  else if (context === "CurrNominal") score *= 1.35 * 1.05;
+  else if (context === "Super") score *= 1.325;
+  else if (context === "OutNominal") score *= 1.325 * 1.05;
+  else if (context === "CurrModule") score *= 0.95 * 1.05;
+  else if (context.startsWith("OtherModule")) score *= 0.95 * 1.0125;
+  if (isGlobal && (isVariable || isEnumCase)) score *= 0.75;
+
+  // Project symbols slightly ahead of SDK ones.
+  if (has("IsSystem")) score *= 0.995;
+
+  // Type compatibility with the expected type.
+  if (has("TypeRelation[Convertible]")) score *= 1.3;
+  else if (has("TypeRelation[Invalid]")) score *= 0.3;
+
+  // Flair.
+  if (flair.includes("ExprSpecific")) score *= 1.5;
+  if (flair.includes("SuperChain")) score *= 1.5;
+  if (flair.includes("CommonKeyword")) score *= 1.25;
+  if (flair.includes("RareKeyword")) score *= 0.75;
+  if (flair.includes("RareType")) score *= 0.75;
+  if (flair.includes("ExprAtFileScope")) score *= 0.125;
+
+  // Deprecated, used in its own definition, and the like.
+  if (has("NotRecommended")) score *= 0.5;
+
+  return score;
 }
 
 const swiftCompiler = memoize(async () => {
