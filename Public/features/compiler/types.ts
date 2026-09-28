@@ -44,7 +44,7 @@ export type CompletionItem = {
 export type WorkerRequest =
   | { id: number; type: "preload" }
   | { id: number; type: "typecheck"; files: SourceFiles }
-  | { id: number; type: "compile"; files: SourceFiles; primaryFile: string }
+  | { id: number; type: "compile"; files: SourceFiles }
   | { id: number; type: "complete"; files: SourceFiles; primaryFile: string; offset: number };
 
 export type WorkerResponse =
@@ -52,6 +52,3 @@ export type WorkerResponse =
   | { id: number; type: "typecheck"; diagnostics?: Diagnostic[]; exitCode?: number; error?: unknown }
   | { id: number; type: "compile"; stage?: string; output?: Output[]; diagnostics?: Diagnostic[]; exitCode?: number; error?: unknown }
   | { id: number; type: "complete"; items?: CompletionItem[]; diagnostics?: Diagnostic[]; error?: unknown };
-
-/** The response a given request `type` resolves with. */
-export type ResponseFor<T extends WorkerRequest["type"]> = Extract<WorkerResponse, { type: T }>;

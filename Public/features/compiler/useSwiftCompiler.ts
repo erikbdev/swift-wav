@@ -1,15 +1,12 @@
 import { onBeforeUnmount, onMounted, ref } from "vue";
-import { createCompilerClient } from "./compilerClient";
-import type { Diagnostic, Output } from "./types";
-import { Workspace } from "../workspace/types";
+import SwiftWorker from "./worker/swift.worker.ts?worker";
+import type { Workspace } from "../workspace/types";
+import type { Output, Diagnostic, WorkerRequest, WorkerResponse } from "./types";
 
 const DOWNLOAD_PROGRESS_WEIGHT = 0.8;
 
-/**
- * Exposes the Swift compiler worker as reactive state: toolchain loading
- * progress, the current activity, diagnostics, and program output.
- */
 export function useSwiftCompiler() {
+  const worker = new SwiftWorker();
   const runDisabled = ref(true);
   const status = ref("Downloading Swift toolchain…");
   const loadError = ref<string | null>(null);
@@ -20,18 +17,45 @@ export function useSwiftCompiler() {
   const output = ref<Output[]>([]);
   const loadingProgress = ref(0);
   let pendingTypecheck: Workspace | null = null;
+  let nextRequestId = 0;
 
-  const client = createCompilerClient((progress) => {
-    loadingProgress.value = progress;
-    if (progress >= DOWNLOAD_PROGRESS_WEIGHT) {
-      status.value = "Setting up Swift compiler…";
-    } else if (progress > 0) {
-      status.value = `Downloading runtime… ${Math.round((progress / DOWNLOAD_PROGRESS_WEIGHT) * 100)}%`;
-    } else {
-      status.value = "Downloading runtime…";
+  worker.addEventListener("message", (event: MessageEvent<WorkerResponse>) => {
+    const message = event.data;
+    if (message.id === -1 && message.type === "preload") {
+      const progress = Number.isFinite(message.progress) ? (message.progress ?? 0) : 0;
+      loadingProgress.value = progress;
+      if (progress >= DOWNLOAD_PROGRESS_WEIGHT) {
+        status.value = "Setting up Swift compiler…";
+      } else if (progress > 0) {
+        status.value = `Downloading runtime… ${Math.round((progress / DOWNLOAD_PROGRESS_WEIGHT) * 100)}%`;
+      } else {
+        status.value = "Downloading runtime…";
+      }
     }
   });
-  const request = client.request;
+
+  function request<T extends Omit<WorkerRequest, "id">>(payload: T): Promise<Extract<WorkerResponse, { type: T["type"] }>> {
+    const id = ++nextRequestId;
+    return new Promise((resolve, reject) => {
+      const onMessage = (event: MessageEvent<WorkerResponse>) => {
+        if (event.data.id !== id) return;
+        cleanup();
+        resolve(event.data as any);
+      };
+      const onError = (event: ErrorEvent) => {
+        cleanup();
+        reject(event.error instanceof Error ? event.error : new Error(event.message));
+      };
+      function cleanup() {
+        worker.removeEventListener("message", onMessage);
+        worker.removeEventListener("error", onError);
+      }
+
+      worker.addEventListener("message", onMessage);
+      worker.addEventListener("error", onError);
+      worker.postMessage({ ...payload, id });
+    });
+  }
 
   async function preload() {
     runDisabled.value = true;
@@ -40,7 +64,7 @@ export function useSwiftCompiler() {
     status.value = "Downloading Swift toolchain…";
 
     try {
-      const result = await request("preload", {});
+      const result = await request({ type: "preload" });
       if (result.error) throw result.error;
       loadingProgress.value = 1;
       toolchainReady.value = true;
@@ -82,7 +106,7 @@ export function useSwiftCompiler() {
       diagnostics.value = [];
       output.value = [];
       status.value = "Compiling...";
-      const result = await request("compile", { files: workspace.files, primaryFile: workspace.active });
+      const result = await request({ type: "compile", files: workspace.files });
       diagnostics.value = result.diagnostics ?? [];
       output.value = result.output ?? [];
     } catch (error) {
@@ -122,7 +146,7 @@ export function useSwiftCompiler() {
         pendingTypecheck = null;
 
         try {
-          const result = await request("typecheck", { files: snapshot.files });
+          const result = await request({ type: "typecheck", files: snapshot.files });
           if (result.error) throw result.error;
           if (!pendingTypecheck) diagnostics.value = result.diagnostics ?? [];
         } catch (error) {
@@ -151,13 +175,13 @@ export function useSwiftCompiler() {
 
   async function autocomplete(workspace: Workspace, offset: number) {
     if (!workspace.active) return [];
-    const result = await request("complete", { files: workspace.files, primaryFile: workspace.active, offset });
+    const result = await request({ type: "complete", files: workspace.files, primaryFile: workspace.active, offset });
     if (result.error) throw result.error;
     return result.items ?? [];
   }
 
   onMounted(() => preload());
-  onBeforeUnmount(() => client.terminate());
+  onBeforeUnmount(() => worker.terminate());
 
   return {
     status,

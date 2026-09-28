@@ -12,10 +12,9 @@ import TimelinePanel from "./features/timeline/TimelinePanel.vue";
 
 import type { Diagnostic } from "./features/compiler/types";
 
-const { workspace, deleteFile, createFile, updateFile, selectFile } = useWorkspace();
+const { workspace, fileNames, deleteFile, createFile, updateFile, selectFile } = useWorkspace();
 const { runDisabled, diagnostics, output, activity, toolchainReady, status, loadError, loadingProgress, typecheck, autocomplete, run, preload } = useSwiftCompiler();
 
-const fileNames = computed(() => Object.keys(workspace.value.files));
 const codeEditor = useTemplateRef("editor");
 let typecheckTimer: ReturnType<typeof setTimeout> | undefined;
 

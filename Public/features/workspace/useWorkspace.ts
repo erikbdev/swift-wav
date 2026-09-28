@@ -61,7 +61,7 @@ export function useWorkspace() {
 
     return {
       files: {
-        ["Song.swift"]: "",
+        ["Song.swift"]: 'print("hello, world!")',
       },
       active: "Song.swift",
     };
@@ -70,6 +70,7 @@ export function useWorkspace() {
   return {
     workspace,
     files: computed(() => workspace.value.files),
+    fileNames: computed(() => Object.keys(workspace.value.files)),
     selectFile,
     createFile,
     updateFile,
