@@ -1,7 +1,7 @@
 import { onBeforeUnmount, onMounted, ref } from "vue";
-import type { WorkspaceSnapshot } from "../workspace/types";
 import { createCompilerClient } from "./compilerClient";
 import type { Diagnostic, Output } from "./types";
+import { Workspace } from "../workspace/types";
 
 const DOWNLOAD_PROGRESS_WEIGHT = 0.8;
 
@@ -19,7 +19,7 @@ export function useSwiftCompiler() {
   const diagnostics = ref<Diagnostic[]>([]);
   const output = ref<Output[]>([]);
   const loadingProgress = ref(0);
-  let pendingTypecheck: WorkspaceSnapshot | null = null;
+  let pendingTypecheck: Workspace | null = null;
 
   const client = createCompilerClient((progress) => {
     loadingProgress.value = progress;
@@ -66,7 +66,7 @@ export function useSwiftCompiler() {
     }
   }
 
-  async function run(workspace: WorkspaceSnapshot) {
+  async function run(workspace: Workspace) {
     if (running.value) return;
 
     running.value = true;
@@ -82,7 +82,7 @@ export function useSwiftCompiler() {
       diagnostics.value = [];
       output.value = [];
       status.value = "Compiling...";
-      const result = await request("compile", { files: workspace.files, primaryFile: workspace.primaryFile });
+      const result = await request("compile", { files: workspace.files, primaryFile: workspace.active });
       diagnostics.value = result.diagnostics ?? [];
       output.value = result.output ?? [];
     } catch (error) {
@@ -104,9 +104,9 @@ export function useSwiftCompiler() {
     }
   }
 
-  function typecheck(workspace: WorkspaceSnapshot) {
+  function typecheck(workspace: Workspace) {
     pendingTypecheck = workspace;
-    void drainTypechecks();
+    drainTypechecks();
   }
 
   async function drainTypechecks() {
@@ -149,9 +149,9 @@ export function useSwiftCompiler() {
     }
   }
 
-  async function autocomplete(workspace: WorkspaceSnapshot, offset: number) {
-    if (!workspace.primaryFile) return [];
-    const result = await request("complete", { files: workspace.files, primaryFile: workspace.primaryFile, offset });
+  async function autocomplete(workspace: Workspace, offset: number) {
+    if (!workspace.active) return [];
+    const result = await request("complete", { files: workspace.files, primaryFile: workspace.active, offset });
     if (result.error) throw result.error;
     return result.items ?? [];
   }

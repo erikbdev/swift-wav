@@ -3,10 +3,10 @@ import { ref, watch } from "vue";
 import type { CompletionProvider } from "./swiftCompletion";
 import { swiftEditorExtensions } from "./swiftEditor";
 import { useCodeMirror } from "./useCodeMirror";
+import { Workspace } from "../workspace/types";
 
 const props = defineProps<{
-  fileId: string;
-  document: string;
+  workspace: Workspace;
   complete: CompletionProvider;
 }>();
 
@@ -17,18 +17,18 @@ const emit = defineEmits<{
 const host = ref<HTMLElement | null>(null);
 const editor = useCodeMirror({
   host,
-  getFileId: () => props.fileId,
-  getDocument: () => props.document,
+  getFileId: () => props.workspace.active,
+  getDocument: () => props.workspace.files[props.workspace.active],
   extensions: () =>
     swiftEditorExtensions({
       complete: (position) => props.complete(position),
-      onChange: (document) => emit("change", props.fileId, document),
+      onChange: (document) => emit("change", props.workspace.active, document),
     }),
 });
 
 // Switching files restores that file's undo history and selection.
 watch(
-  () => [props.fileId, props.document] as const,
+  () => [props.workspace.active, props.workspace.files[props.workspace.active]] as const,
   ([fileId, document]) => {
     editor.showFile(fileId, document);
   },

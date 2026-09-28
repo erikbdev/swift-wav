@@ -1,61 +1,68 @@
 <script setup lang="ts" vapor>
-import { computed, nextTick, useTemplateRef } from "vue";
+import { computed, nextTick, onBeforeUnmount, useTemplateRef, watch } from "vue";
+import { useSwiftCompiler } from "./features/compiler/useSwiftCompiler";
+import { useWorkspace } from "./features/workspace/useWorkspace";
+
 import TopBar from "./components/TopBar.vue";
 import CompilerConsole from "./features/compiler/CompilerConsole.vue";
 import RuntimePanel from "./features/compiler/RuntimePanel.vue";
-import type { Diagnostic } from "./features/compiler/types";
-import { useAutoTypecheck } from "./features/compiler/useAutoTypecheck";
-import { useSwiftCompiler } from "./features/compiler/useSwiftCompiler";
 import CodeEditor from "./features/editor/CodeEditor.vue";
+import FileTabs from "./features/editor/FileTabs.vue";
 import TimelinePanel from "./features/timeline/TimelinePanel.vue";
-import FileTabs from "./features/workspace/FileTabs.vue";
-import { useWorkspace } from "./features/workspace/useWorkspace";
 
-const workspace = useWorkspace();
-const compiler = useSwiftCompiler();
-useAutoTypecheck(
-  () => workspace.files,
-  () => compiler.typecheck(workspace.snapshot()),
+import type { Diagnostic } from "./features/compiler/types";
+
+const { workspace, deleteFile, createFile, updateFile, selectFile } = useWorkspace();
+const { runDisabled, diagnostics, output, activity, toolchainReady, status, loadError, loadingProgress, typecheck, autocomplete, run, preload } = useSwiftCompiler();
+
+const fileNames = computed(() => Object.keys(workspace.value.files));
+const codeEditor = useTemplateRef("editor");
+let typecheckTimer: ReturnType<typeof setTimeout> | undefined;
+
+// Typecheck every 1500ms once user stops editing.
+watch(
+  workspace.value.files,
+  () => {
+    clearTimeout(typecheckTimer);
+    typecheckTimer = setTimeout(() => typecheck(workspace.value), 1500);
+  },
+  { deep: true },
 );
 
-const { files, activeFile } = workspace;
-const { runDisabled, diagnostics, output, activity, toolchainReady, status, loadError, loadingProgress } = compiler;
-const fileNames = computed(() => Object.keys(files));
-const codeEditor = useTemplateRef("editor");
+onBeforeUnmount(() => clearTimeout(typecheckTimer));
 
 function complete(position: number) {
-  return compiler.autocomplete(workspace.snapshot(), position);
+  return autocomplete(workspace.value, position);
 }
 
-function run() {
-  void compiler.run(workspace.snapshot());
+function runClicked() {
+  run(workspace.value);
 }
 
-function deleteFile(filename: string) {
+function deleteClicked(filename: string) {
   codeEditor.value?.forgetFile(filename);
-  workspace.deleteFile(filename);
+  deleteFile(filename);
 }
 
 async function revealDiagnostic(diagnostic: Diagnostic) {
   const target = fileNames.value.find((name) => diagnostic.file?.endsWith(name));
-  if (target) workspace.selectFile(target);
+  if (target) selectFile(target);
   await nextTick();
   codeEditor.value?.reveal(diagnostic);
 }
 </script>
-
 <template>
   <div class="app">
-    <TopBar :disabled="runDisabled" @run="run" />
+    <TopBar :disabled="runDisabled" @run="runClicked" />
 
     <div class="body">
       <main class="editor-column">
-        <FileTabs :files="fileNames" :active="activeFile" @select="workspace.selectFile" @create="workspace.createFile" @delete="deleteFile" />
-        <CodeEditor ref="editor" :file-id="activeFile" :document="files[activeFile] ?? ''" :complete="complete" @change="workspace.updateFile" />
+        <FileTabs :files="fileNames" :active="workspace.active" @select="selectFile" @create="createFile" @delete="deleteClicked" />
+        <CodeEditor ref="editor" :workspace="workspace" :complete="complete" @change="updateFile" />
         <CompilerConsole :diagnostics="diagnostics" :output="output" :activity="activity" @reveal="revealDiagnostic" />
       </main>
 
-      <RuntimePanel v-if="!toolchainReady" :status="status" :error="loadError" :progress="loadingProgress" @retry="compiler.preload" />
+      <RuntimePanel v-if="!toolchainReady" :status="status" :error="loadError" :progress="loadingProgress" @retry="preload" />
       <TimelinePanel v-else />
     </div>
   </div>
