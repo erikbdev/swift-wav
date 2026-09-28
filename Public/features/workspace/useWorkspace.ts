@@ -68,7 +68,7 @@ export function useWorkspace() {
   }
 
   return {
-    workspace,
+    workspace: readonly(workspace),
     files: computed(() => workspace.value.files),
     fileNames: computed(() => Object.keys(workspace.value.files)),
     selectFile,

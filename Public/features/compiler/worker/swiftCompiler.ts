@@ -6,7 +6,7 @@
 
 import { Directory, File, PreopenDirectory } from "@bjorn3/browser_wasi_shim";
 import { memoize } from "./memoize";
-import { runWasiCommand } from "./wasi-run";
+import { useWASICommand } from "./wasi-run";
 import type { SourceFiles } from "../types";
 import { parseCompletionResults } from "./completion";
 import { parseDiagnostics } from "./diagnostics";
@@ -64,7 +64,7 @@ export function createSwiftCompiler(toolchain: Toolchain) {
           }
 
           const buildPreopen = () => new PreopenDirectory("/build", buildDir);
-          const result = await runWasiCommand(
+          const result = await useWASICommand(
             frontend,
             [
               "swift-frontend",
@@ -97,7 +97,7 @@ export function createSwiftCompiler(toolchain: Toolchain) {
 
           const buildPreopen = () => new PreopenDirectory("/build", buildDir);
 
-          let frontendResult = await runWasiCommand(
+          let frontendResult = await useWASICommand(
             frontend,
             [
               "swift-frontend",
@@ -164,7 +164,7 @@ export function createSwiftCompiler(toolchain: Toolchain) {
             "/build/main.wasm",
           ];
 
-          const linkResult = await runWasiCommand(linker, linkerArgv, [buildPreopen(), sysrootPreopen(), swiftwavPreopen()]);
+          const linkResult = await useWASICommand(linker, linkerArgv, [buildPreopen(), sysrootPreopen(), swiftwavPreopen()]);
           console.log("[wasm-ld] stdout:", linkResult.stdout, "stderr:", linkResult.stderr);
           const programFile = buildDir.get("main.wasm");
           if (linkResult.exitCode !== 0 || !(programFile instanceof File)) {
@@ -180,7 +180,7 @@ export function createSwiftCompiler(toolchain: Toolchain) {
           // diagnostic when the run actually fails (a trap or non-zero exit),
           // since a well-behaved program is free to write to stderr as output.
           const programModule = await WebAssembly.compile(programFile.data as BufferSource);
-          const runResult = await runWasiCommand(programModule, ["main"], []);
+          const runResult = await useWASICommand(programModule, ["main"], []);
           console.log("[program] stdout:", runResult.stdout, "stderr: ", runResult.stderr);
 
           const timestamp = Date.now();
@@ -232,7 +232,7 @@ export function createSwiftCompiler(toolchain: Toolchain) {
             ...commonFrontendArgs,
           ];
 
-          const result = await runWasiCommand(ideTest, argv, [buildPreopen(), sysrootPreopen(), moduleCachePreopen(), swiftwavPreopen()]);
+          const result = await useWASICommand(ideTest, argv, [buildPreopen(), sysrootPreopen(), moduleCachePreopen(), swiftwavPreopen()]);
           console.log("[swift-ide-test] stdout:", result.stdout, "stderr:", result.stderr);
           return {
             items: parseCompletionResults(result.stdout),

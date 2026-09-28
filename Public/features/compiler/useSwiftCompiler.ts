@@ -1,4 +1,4 @@
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { onBeforeUnmount, onMounted, ref, toRaw } from "vue";
 import SwiftWorker from "./worker/swift.worker.ts?worker";
 import type { Workspace } from "../workspace/types";
 import type { Output, Diagnostic, WorkerRequest, WorkerResponse } from "./types";
@@ -8,14 +8,14 @@ const DOWNLOAD_PROGRESS_WEIGHT = 0.8;
 export function useSwiftCompiler() {
   const worker = new SwiftWorker();
   const runDisabled = ref(true);
-  const status = ref("Downloading Swift toolchain…");
+  const loadingProgress = ref(0);
   const loadError = ref<string | null>(null);
   const toolchainReady = ref(false);
   const running = ref(false);
+  const status = ref("Downloading Swift toolchain…");
   const activity = ref<"typechecking" | "building" | null>(null);
   const diagnostics = ref<Diagnostic[]>([]);
   const output = ref<Output[]>([]);
-  const loadingProgress = ref(0);
   let pendingTypecheck: Workspace | null = null;
   let nextRequestId = 0;
 
@@ -106,7 +106,7 @@ export function useSwiftCompiler() {
       diagnostics.value = [];
       output.value = [];
       status.value = "Compiling...";
-      const result = await request({ type: "compile", files: workspace.files });
+      const result = await request({ type: "compile", files: toRaw(workspace.files) });
       diagnostics.value = result.diagnostics ?? [];
       output.value = result.output ?? [];
     } catch (error) {
@@ -129,7 +129,7 @@ export function useSwiftCompiler() {
   }
 
   function typecheck(workspace: Workspace) {
-    pendingTypecheck = workspace;
+    pendingTypecheck = toRaw(workspace);
     drainTypechecks();
   }
 
@@ -175,7 +175,7 @@ export function useSwiftCompiler() {
 
   async function autocomplete(workspace: Workspace, offset: number) {
     if (!workspace.active) return [];
-    const result = await request({ type: "complete", files: workspace.files, primaryFile: workspace.active, offset });
+    const result = await request({ type: "complete", files: toRaw(workspace.files), primaryFile: toRaw(workspace.active), offset });
     if (result.error) throw result.error;
     return result.items ?? [];
   }
