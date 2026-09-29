@@ -10,7 +10,7 @@ export interface WasiCommandResult {
   stderr: string[];
 }
 
-export async function runWasiCommand(module: WebAssembly.Module, argv: string[], preopens: Fd[]): Promise<WasiCommandResult> {
+export async function runWASICommand(module: WebAssembly.Module, argv: string[], preopens: Fd[]): Promise<WasiCommandResult> {
   const stdout: string[] = [];
   const stderr: string[] = [];
   const fds: Fd[] = [new OpenFile(new File([])), ConsoleStdout.lineBuffered((line) => stdout.push(line)), ConsoleStdout.lineBuffered((line) => stderr.push(line)), ...preopens];

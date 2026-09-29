@@ -71,7 +71,7 @@ export function useSwiftCompiler() {
       loadError.value = null;
       status.value = "Ready";
       runDisabled.value = running.value;
-      if (pendingTypecheck) void drainTypechecks();
+      if (pendingTypecheck) drainTypechecks();
     } catch (error) {
       toolchainReady.value = false;
       loadingProgress.value = 0;

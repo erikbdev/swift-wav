@@ -1,20 +1,13 @@
-// Runs swift-frontend, wasm-ld, and swift-ide-test over WASI, with the
-// sysroot mounted from a plain tar archive. See
-// https://github.com/tothambrus11/swift-toolchain-wasm's docs/consuming.md
-// for the argv this mirrors — there is no on-wasm driver, since WASI can't
-// spawn processes, so the embedder replays swiftc's argv by hand.
-
 import { Directory, File, PreopenDirectory } from "@bjorn3/browser_wasi_shim";
 import { memoize } from "./memoize";
-import { useWASICommand } from "./wasi-run";
-import type { SourceFiles } from "../types";
+import { runWASICommand } from "./wasi-run";
 import { parseCompletionResults } from "./completion";
 import { parseDiagnostics } from "./diagnostics";
+import type { SourceFiles } from "../types";
 import type { Toolchain } from "./toolchain";
 
 const COMPLETION_TOKEN = "COMPLETE";
 
-/** Common `-frontend`-family flags shared by swift-frontend and swift-ide-test. */
 const commonFrontendArgs = [
   "-target",
   "wasm32-unknown-wasip1",
@@ -23,9 +16,6 @@ const commonFrontendArgs = [
   "/sysroot/wasi-sysroot",
   "-resource-dir",
   "/sysroot/swift/lib/swift_static",
-  // The Clang modules the stdlib depends on aren't prebuilt, so ask
-  // ClangImporter to build them itself, into the shared /module-cache
-  // preopen a SwiftCompiler mounts below.
   "-Xcc",
   "-fimplicit-module-maps",
   "-Xcc",
@@ -64,7 +54,7 @@ export function createSwiftCompiler(toolchain: Toolchain) {
           }
 
           const buildPreopen = () => new PreopenDirectory("/build", buildDir);
-          const result = await useWASICommand(
+          const result = await runWASICommand(
             frontend,
             [
               "swift-frontend",
@@ -97,7 +87,7 @@ export function createSwiftCompiler(toolchain: Toolchain) {
 
           const buildPreopen = () => new PreopenDirectory("/build", buildDir);
 
-          let frontendResult = await useWASICommand(
+          let frontendResult = await runWASICommand(
             frontend,
             [
               "swift-frontend",
@@ -164,7 +154,7 @@ export function createSwiftCompiler(toolchain: Toolchain) {
             "/build/main.wasm",
           ];
 
-          const linkResult = await useWASICommand(linker, linkerArgv, [buildPreopen(), sysrootPreopen(), swiftwavPreopen()]);
+          const linkResult = await runWASICommand(linker, linkerArgv, [buildPreopen(), sysrootPreopen(), swiftwavPreopen()]);
           console.log("[wasm-ld] stdout:", linkResult.stdout, "stderr:", linkResult.stderr);
           const programFile = buildDir.get("main.wasm");
           if (linkResult.exitCode !== 0 || !(programFile instanceof File)) {
@@ -180,7 +170,7 @@ export function createSwiftCompiler(toolchain: Toolchain) {
           // diagnostic when the run actually fails (a trap or non-zero exit),
           // since a well-behaved program is free to write to stderr as output.
           const programModule = await WebAssembly.compile(programFile.data as BufferSource);
-          const runResult = await useWASICommand(programModule, ["main"], []);
+          const runResult = await runWASICommand(programModule, ["main"], []);
           console.log("[program] stdout:", runResult.stdout, "stderr: ", runResult.stderr);
 
           const timestamp = Date.now();
@@ -232,7 +222,7 @@ export function createSwiftCompiler(toolchain: Toolchain) {
             ...commonFrontendArgs,
           ];
 
-          const result = await useWASICommand(ideTest, argv, [buildPreopen(), sysrootPreopen(), moduleCachePreopen(), swiftwavPreopen()]);
+          const result = await runWASICommand(ideTest, argv, [buildPreopen(), sysrootPreopen(), moduleCachePreopen(), swiftwavPreopen()]);
           console.log("[swift-ide-test] stdout:", result.stdout, "stderr:", result.stderr);
           return {
             items: parseCompletionResults(result.stdout),

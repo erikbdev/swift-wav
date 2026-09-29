@@ -152,11 +152,8 @@ const emit = defineEmits<{
   transition: width 0.2s ease;
 }
 .runtime-error-detail {
-  overflow: hidden;
   color: var(--text-2) !important;
   font: 9px/1.5 var(--mono) !important;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .runtime-retry {
   height: 26px;

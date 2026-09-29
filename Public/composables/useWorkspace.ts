@@ -1,5 +1,9 @@
-import { computed, reactive, readonly, ref, toRefs, unref } from "vue";
-import type { Workspace } from "./types";
+import { computed, readonly, ref } from "vue";
+
+export type Workspace = {
+  files: Record<string, string>;
+  active: string;
+};
 
 const STORAGE_KEY = "swift-wav:workspace";
 
@@ -8,7 +12,7 @@ export function useWorkspace() {
 
   function persist() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(workspace));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(workspace.value));
     } catch {
       // Storage can be full or unavailable; the current session still works.
     }
@@ -61,7 +65,17 @@ export function useWorkspace() {
 
     return {
       files: {
-        ["Song.swift"]: 'print("hello, world!")',
+        ["Song.swift"]: `\
+import SwiftWAV
+
+@main
+struct MySong: Song {
+  var body: some Timeline {
+    Track("Drums") {
+    }
+  }
+}
+`,
       },
       active: "Song.swift",
     };
