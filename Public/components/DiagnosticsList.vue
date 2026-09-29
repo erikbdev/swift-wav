@@ -1,5 +1,5 @@
 <script setup lang="ts" vapor>
-import type { Diagnostic } from "./types";
+import type { Diagnostic } from "../types/compiler";
 
 defineProps<{
   diagnostics: Diagnostic[];

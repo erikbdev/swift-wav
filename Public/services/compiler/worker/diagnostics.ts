@@ -1,4 +1,4 @@
-import type { Diagnostic } from "../types";
+import type { Diagnostic } from "../../../types/compiler";
 
 // Matches swift-frontend/clang-style diagnostic lines, e.g.:
 //   /build/main.swift:5:3: error: unknown type name 'uint3d_t'

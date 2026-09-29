@@ -2,7 +2,7 @@
 import { computed, ref, watch } from "vue";
 import DiagnosticsList from "./DiagnosticsList.vue";
 import OutputList from "./OutputList.vue";
-import type { Diagnostic, Output } from "./types";
+import type { Diagnostic, Output } from "../types/compiler";
 
 const props = defineProps<{
   diagnostics: Diagnostic[];

@@ -4,7 +4,7 @@
 
 import { syntaxTree } from "@codemirror/language";
 import { snippet, type Completion, type CompletionContext, type CompletionResult } from "@codemirror/autocomplete";
-import type { CompletionItem } from "../compiler/types";
+import type { CompletionItem } from "../types/compiler";
 
 /** Returns the completions at a document offset (the start of the word being completed). */
 export type CompletionProvider = (position: number) => Promise<CompletionItem[]>;

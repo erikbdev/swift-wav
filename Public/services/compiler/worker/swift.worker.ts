@@ -2,7 +2,7 @@
 // completion don't jank the main thread. It only maps messages to the
 // compiler; see swiftCompiler.ts and toolchain.ts for the work itself.
 
-import type { WorkerRequest, WorkerResponse } from "../types";
+import type { WorkerRequest, WorkerResponse } from "../../../types/compiler";
 import { createSwiftCompiler } from "./swiftCompiler";
 import { fetchToolchains } from "./toolchain";
 

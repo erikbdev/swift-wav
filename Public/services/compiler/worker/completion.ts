@@ -3,7 +3,7 @@
 // a semantic score for ranking, and insert text with Xcode-style editor
 // placeholders, with trailing closures already expanded.
 
-import type { CompletionItem } from "../types";
+import type { CompletionItem } from "../../../types/compiler";
 
 /**
  * One result line:

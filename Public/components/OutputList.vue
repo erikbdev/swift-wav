@@ -1,5 +1,5 @@
 <script setup lang="ts" vapor>
-import type { Output } from "./types";
+import type { Output } from "../types/compiler";
 
 defineProps<{
   output: Output[];

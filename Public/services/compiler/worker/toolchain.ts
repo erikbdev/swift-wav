@@ -1,5 +1,5 @@
-import { memoize } from "./memoize";
-import { untar } from "./tar";
+import { memoize } from "../../../utils/memoize";
+import { untar } from "../../../utils/tar";
 
 const TOOLCHAIN_BASE = "/toolchain";
 

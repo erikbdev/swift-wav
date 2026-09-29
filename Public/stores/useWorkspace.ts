@@ -1,9 +1,5 @@
 import { computed, readonly, ref } from "vue";
-
-export type Workspace = {
-  files: Record<string, string>;
-  active: string;
-};
+import type { Workspace } from "../types/workspace";
 
 const STORAGE_KEY = "swift-wav:workspace";
 

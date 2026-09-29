@@ -1,7 +1,7 @@
 import { onBeforeUnmount, onMounted, ref, toRaw } from "vue";
-import SwiftWorker from "./worker/swift.worker.ts?worker";
-import type { Workspace } from "../workspace/types";
-import type { Output, Diagnostic, WorkerRequest, WorkerResponse } from "./types";
+import SwiftWorker from "../services/compiler/worker/swift.worker.ts?worker";
+import type { Workspace } from "../types/workspace";
+import type { Output, Diagnostic, WorkerRequest, WorkerResponse } from "../types/compiler";
 
 const DOWNLOAD_PROGRESS_WEIGHT = 0.8;
 

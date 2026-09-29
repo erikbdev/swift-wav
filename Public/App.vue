@@ -1,16 +1,16 @@
 <script setup lang="ts" vapor>
 import { nextTick, onBeforeUnmount, useTemplateRef, watch } from "vue";
-import { useSwiftCompiler } from "./features/compiler/useSwiftCompiler";
-import { useWorkspace } from "./composables/useWorkspace";
+import { useSwiftCompiler } from "./stores/useSwiftCompiler";
+import { useWorkspace } from "./stores/useWorkspace";
 
 import TopBar from "./components/TopBar.vue";
-import CompilerConsole from "./features/compiler/CompilerConsole.vue";
-import RuntimePanel from "./features/compiler/RuntimePanel.vue";
-import CodeEditor from "./features/editor/CodeEditor.vue";
-import FileTabs from "./features/editor/FileTabs.vue";
-import TimelinePanel from "./features/timeline/TimelinePanel.vue";
+import CompilerConsole from "./components/CompilerConsole.vue";
+import RuntimePanel from "./components/RuntimePanel.vue";
+import CodeEditor from "./components/CodeEditor.vue";
+import FileTabs from "./components/FileTabs.vue";
+import TimelinePanel from "./components/TimelinePanel.vue";
 
-import type { Diagnostic } from "./features/compiler/types";
+import type { Diagnostic } from "./types/compiler";
 
 const { workspace, fileNames, deleteFile, createFile, updateFile, selectFile } = useWorkspace();
 const { runDisabled, diagnostics, output, activity, toolchainReady, status, loadError, loadingProgress, typecheck, autocomplete, run, preload } = useSwiftCompiler();
