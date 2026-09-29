@@ -9,12 +9,6 @@ interface UseCodeMirrorOptions {
   extensions: () => Extension[];
 }
 
-/**
- * Owns CodeMirror's imperative lifecycle inside a Vue component.
- *
- * The DOM node is created by the component template; this composable is the
- * only place that creates, replaces, focuses, or destroys an EditorView.
- */
 export function useCodeMirror(options: UseCodeMirrorOptions) {
   let view: EditorView | null = null;
   let currentFileId: string | null = null;
