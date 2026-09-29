@@ -1,9 +1,9 @@
 import { Directory, File, PreopenDirectory } from "@bjorn3/browser_wasi_shim";
-import { memoize } from "../../../utils/memoize";
-import { runWASICommand } from "../../../utils/wasi-run";
 import { parseCompletionResults } from "./completion";
 import { parseDiagnostics } from "./diagnostics";
-import type { SourceFiles } from "../../../types/compiler";
+import { memoize } from "../../utils/memoize";
+import { runWASICommand } from "../../utils/wasi-run";
+import type { SourceFiles } from "../../types/compiler";
 import type { Toolchain } from "./toolchain";
 
 const COMPLETION_TOKEN = "COMPLETE";

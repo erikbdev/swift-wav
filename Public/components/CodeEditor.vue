@@ -1,8 +1,8 @@
 <script setup lang="ts" vapor>
 import { ref, watch } from "vue";
-import type { CompletionProvider } from "../utils/swiftCompletion";
+import { useCodeMirror } from "../composables/useCodeMirror";
 import { swiftEditorExtensions } from "../utils/swiftEditor";
-import { useCodeMirror } from "../utils/useCodeMirror";
+import type { CompletionProvider } from "../utils/swiftCompletion";
 import type { Workspace } from "../types/workspace";
 
 const props = defineProps<{

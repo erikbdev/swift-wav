@@ -1,7 +1,7 @@
 <script setup lang="ts" vapor>
 import { nextTick, onBeforeUnmount, useTemplateRef, watch } from "vue";
-import { useSwiftCompiler } from "./stores/useSwiftCompiler";
-import { useWorkspace } from "./stores/useWorkspace";
+import { useSwiftCompiler } from "./composables/useSwiftCompiler";
+import { useWorkspace } from "./composables/useWorkspace";
 
 import TopBar from "./components/TopBar.vue";
 import CompilerConsole from "./components/CompilerConsole.vue";
@@ -56,14 +56,12 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
 
     <div class="body">
       <main class="editor-column">
-        <FileTabs :files="fileNames" :active="workspace.active" @select="selectFile" @create="createFile"
-          @delete="deleteClicked" />
+        <FileTabs :files="fileNames" :active="workspace.active" @select="selectFile" @create="createFile" @delete="deleteClicked" />
         <CodeEditor ref="editor" :workspace="workspace" :complete="complete" @change="updateFile" />
         <CompilerConsole :diagnostics="diagnostics" :output="output" :activity="activity" @reveal="revealDiagnostic" />
       </main>
 
-      <RuntimePanel v-if="!toolchainReady" :status="status" :error="loadError" :progress="loadingProgress"
-        @retry="preload" />
+      <RuntimePanel v-if="!toolchainReady" :status="status" :error="loadError" :progress="loadingProgress" @retry="preload" />
       <TimelinePanel v-else />
     </div>
   </div>
