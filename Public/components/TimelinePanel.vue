@@ -26,7 +26,6 @@
           <span class="track-color"></span>
           <div>
             <div class="track-name">Drums</div>
-            <span class="track-type">MIDI</span>
           </div>
         </div>
         <div class="track-lane">
@@ -198,7 +197,7 @@
 }
 .track-color {
   width: 4px;
-  height: 32px;
+  height: 24px;
   border-radius: 4px;
   background: var(--accent);
 }
@@ -211,13 +210,6 @@
 .track-name {
   color: var(--text-0);
   font-size: 11px;
-}
-.track-type {
-  display: block;
-  margin-top: 3px;
-  color: var(--text-3);
-  font: 9px var(--mono);
-  letter-spacing: 0.05em;
 }
 .track-lane {
   position: relative;

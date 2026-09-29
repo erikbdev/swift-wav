@@ -1,6 +1,6 @@
 <script setup lang="ts" vapor>
 import { nextTick, onBeforeUnmount, useTemplateRef, watch } from "vue";
-import { useSwiftCompiler } from "./composables/useSwiftCompiler";
+import { useCompiler } from "./composables/useCompiler";
 import { useWorkspace } from "./composables/useWorkspace";
 
 import TopBar from "./components/TopBar.vue";
@@ -13,7 +13,7 @@ import TimelinePanel from "./components/TimelinePanel.vue";
 import type { Diagnostic } from "./types/compiler";
 
 const { workspace, fileNames, deleteFile, createFile, updateFile, selectFile } = useWorkspace();
-const { runDisabled, diagnostics, output, activity, toolchainReady, status, loadError, loadingProgress, typecheck, autocomplete, run, preload } = useSwiftCompiler();
+const { loading, compiling, typechecking, diagnostics, output, preload, compile, typecheck, codeCompletion } = useCompiler();
 
 const codeEditor = useTemplateRef("editor");
 let typecheckTimer: ReturnType<typeof setTimeout> | undefined;
@@ -30,14 +30,6 @@ watch(
 
 onBeforeUnmount(() => clearTimeout(typecheckTimer));
 
-function complete(position: number) {
-  return autocomplete(workspace.value, position);
-}
-
-function runClicked() {
-  run(workspace.value);
-}
-
 function deleteClicked(filename: string) {
   codeEditor.value?.forgetFile(filename);
   deleteFile(filename);
@@ -52,16 +44,16 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
 </script>
 <template>
   <div class="app">
-    <TopBar :disabled="runDisabled" @run="runClicked" />
+    <TopBar :disabled="!compiling" @run="() => compile(workspace)" />
 
     <div class="body">
       <main class="editor-column">
         <FileTabs :files="fileNames" :active="workspace.active" @select="selectFile" @create="createFile" @delete="deleteClicked" />
-        <CodeEditor ref="editor" :workspace="workspace" :complete="complete" @change="updateFile" />
-        <CompilerConsole :diagnostics="diagnostics" :output="output" :activity="activity" @reveal="revealDiagnostic" />
+        <CodeEditor ref="editor" :workspace="workspace" :complete="(p) => codeCompletion(workspace, p)" @change="updateFile" />
+        <CompilerConsole :diagnostics="diagnostics" :output="output" :activity="null" @reveal="revealDiagnostic" />
       </main>
 
-      <RuntimePanel v-if="!toolchainReady" :status="status" :error="loadError" :progress="loadingProgress" @retry="preload" />
+      <RuntimePanel v-if="loading !== 1.0" :status="''" :error="loading" :progress="loading" @retry="preload" />
       <TimelinePanel v-else />
     </div>
   </div>
