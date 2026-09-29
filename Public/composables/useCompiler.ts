@@ -39,7 +39,7 @@ export function useCompiler() {
       };
       const onError = (event: ErrorEvent) => {
         cleanup();
-        reject(event.error instanceof Error ? event.error : new Error(event.message));
+        reject(event.error);
       };
       function cleanup() {
         worker.removeEventListener("message", onMessage);
@@ -55,7 +55,7 @@ export function useCompiler() {
   async function preload() {
     try {
       const result = await request({ type: "preload" });
-      state.value.loading = result.error ?? result.progress ?? null;
+      state.value.loading = result.progress ?? 1.0;
     } catch (error) {
       state.value.loading = error;
       state.value.diagnostics = [
@@ -126,8 +126,9 @@ export function useCompiler() {
     return result.items ?? [];
   }
 
-  onMounted(() => preload());
-  onBeforeUnmount(() => worker.terminate());
+  function terminate() {
+    worker.terminate();
+  }
 
   return {
     loading: computed(() => state.value.loading),
@@ -139,6 +140,7 @@ export function useCompiler() {
     typecheck,
     preload,
     codeCompletion,
+    terminate,
   };
 }
 

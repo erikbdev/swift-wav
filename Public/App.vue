@@ -1,19 +1,19 @@
 <script setup lang="ts" vapor>
-import { nextTick, onBeforeUnmount, useTemplateRef, watch } from "vue";
+import { nextTick, onBeforeMount, onBeforeUnmount, useTemplateRef, watch } from "vue";
 import { useCompiler } from "./composables/useCompiler";
 import { useWorkspace } from "./composables/useWorkspace";
 
 import TopBar from "./components/TopBar.vue";
 import CompilerConsole from "./components/CompilerConsole.vue";
-import RuntimePanel from "./components/RuntimePanel.vue";
 import CodeEditor from "./components/CodeEditor.vue";
 import FileTabs from "./components/FileTabs.vue";
 import TimelinePanel from "./components/TimelinePanel.vue";
+import LoadingCompiler from "./components/LoadingCompiler.vue";
 
 import type { Diagnostic } from "./types/compiler";
 
 const { workspace, fileNames, deleteFile, createFile, updateFile, selectFile } = useWorkspace();
-const { loading, compiling, typechecking, diagnostics, output, preload, compile, typecheck, codeCompletion } = useCompiler();
+const { loading, compiling, typechecking, diagnostics, output, preload, compile, typecheck, codeCompletion, terminate } = useCompiler();
 
 const codeEditor = useTemplateRef("editor");
 let typecheckTimer: ReturnType<typeof setTimeout> | undefined;
@@ -28,7 +28,14 @@ watch(
   { deep: true },
 );
 
-onBeforeUnmount(() => clearTimeout(typecheckTimer));
+onBeforeMount(() => {
+  preload();
+});
+
+onBeforeUnmount(() => {
+  clearTimeout(typecheckTimer);
+  terminate();
+});
 
 function deleteClicked(filename: string) {
   codeEditor.value?.forgetFile(filename);
@@ -44,7 +51,7 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
 </script>
 <template>
   <div class="app">
-    <TopBar :disabled="!compiling" @run="() => compile(workspace)" />
+    <TopBar :disabled="!compiling && loading === 1.0" @run="() => compile(workspace)" />
 
     <div class="body">
       <main class="editor-column">
@@ -53,7 +60,7 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
         <CompilerConsole :diagnostics="diagnostics" :output="output" :activity="null" @reveal="revealDiagnostic" />
       </main>
 
-      <RuntimePanel v-if="loading !== 1.0" :status="''" :error="loading" :progress="loading" @retry="preload" />
+      <LoadingCompiler v-if="loading !== 1.0" :status="''" :error="loading?.message" :progress="typeof loading === 'number' ? loading : undefined" @retry="preload" />
       <TimelinePanel v-else />
     </div>
   </div>
