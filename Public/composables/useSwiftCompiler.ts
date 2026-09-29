@@ -1,5 +1,5 @@
 import { onBeforeUnmount, onMounted, ref, toRaw } from "vue";
-import SwiftWorker from "../services/compiler/worker/swift.worker.ts?worker";
+import SwiftWorker from "../services/compiler/swift.worker.ts?worker";
 import type { Workspace } from "../types/workspace";
 import type { Output, Diagnostic, WorkerRequest, WorkerResponse } from "../types/compiler";
 
