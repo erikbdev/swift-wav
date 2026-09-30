@@ -45,10 +45,10 @@ export type WorkerRequest =
   | { id: number; type: "preload" }
   | { id: number; type: "typecheck"; files: SourceFiles }
   | { id: number; type: "compile"; files: SourceFiles }
-  | { id: number; type: "complete"; files: SourceFiles; primaryFile: string; offset: number };
+  | { id: number; type: "codecompletion"; files: SourceFiles; primaryFile: string; offset: number };
 
 export type WorkerResponse =
   | { id: number; type: "preload"; progress?: number; error?: unknown }
   | { id: number; type: "typecheck"; diagnostics?: Diagnostic[]; exitCode?: number; error?: unknown }
   | { id: number; type: "compile"; stage?: string; output?: Output[]; diagnostics?: Diagnostic[]; exitCode?: number; error?: unknown }
-  | { id: number; type: "complete"; items?: CompletionItem[]; diagnostics?: Diagnostic[]; error?: unknown };
+  | { id: number; type: "codecompletion"; items?: CompletionItem[]; diagnostics?: Diagnostic[]; error?: unknown };

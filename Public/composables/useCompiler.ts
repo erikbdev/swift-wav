@@ -1,34 +1,35 @@
-import { computed, onBeforeUnmount, onMounted, ref, toRaw, toValue } from "vue";
+import { computed, onBeforeMount, onBeforeUnmount, onMounted, ref, toRaw, toValue } from "vue";
 import SwiftWorker from "../services/compiler/worker.ts?worker";
 import type { Workspace } from "../types/workspace";
 import type { Output, Diagnostic, WorkerRequest, WorkerResponse } from "../types/compiler";
 
-const worker = new SwiftWorker();
-const state = ref({
-  preloading: null as number | unknown | null,
-  compiling: false,
-  typechecking: false,
-  diagnostics: [] as Diagnostic[],
-  output: [] as Output[],
-});
-
-let nextRequestId = 0;
-
-worker.addEventListener("message", (event: MessageEvent<WorkerResponse>) => {
-  const message = event.data;
-  if (message.id !== -1 || message.type !== "preload") return;
-  if (message.error) {
-    state.value.preloading = message.error;
-  } else {
-    state.value.preloading = message.progress ?? null;
-  }
-});
-
 export function useCompiler() {
+  const state = ref({
+    preloading: null as number | unknown | null,
+    compiling: false,
+    typechecking: false,
+    diagnostics: [] as Diagnostic[],
+    output: [] as Output[],
+  });
+
+  let nextRequestId = 0;
+  const worker = new SwiftWorker();
+
+  worker.addEventListener("message", (event: MessageEvent<WorkerResponse>) => {
+    const message = event.data;
+    if (message.id !== -1 || message.type !== "preload") return;
+    if (message.error) {
+      state.value.preloading = message.error;
+    } else {
+      state.value.preloading = message.progress ?? null;
+    }
+  });
+
   function request<T extends Omit<WorkerRequest, "id">>(payload: T): Promise<Extract<WorkerResponse, { type: T["type"] }>> {
     const id = ++nextRequestId;
+
     return new Promise((resolve, reject) => {
-      const onMessage = (event: MessageEvent<WorkerResponse>) => {
+      function onMessage(event: MessageEvent<WorkerResponse>) {
         if (event.data.id !== id) return;
         cleanup();
         if (event.data.error) {
@@ -36,14 +37,16 @@ export function useCompiler() {
         } else {
           resolve(event.data as any);
         }
-      };
-      const onError = (event: ErrorEvent) => {
+      }
+
+      function onError(event: ErrorEvent) {
         cleanup();
         reject(event.error);
-      };
+      }
+
       function cleanup() {
-        worker.removeEventListener("message", onMessage);
         worker.removeEventListener("error", onError);
+        worker.removeEventListener("message", onMessage);
       }
 
       worker.addEventListener("message", onMessage);
@@ -113,13 +116,12 @@ export function useCompiler() {
 
   async function codeCompletion(workspace: Workspace, offset: number) {
     if (!workspace.active) return [];
-    const result = await request({ type: "complete", files: toRaw(workspace.files), primaryFile: toRaw(workspace.active), offset });
+    const result = await request({ type: "codecompletion", files: toRaw(workspace.files), primaryFile: toRaw(workspace.active), offset });
     return result.items ?? [];
   }
 
-  function terminate() {
-    worker.terminate();
-  }
+  onBeforeMount(() => preload());
+  onBeforeUnmount(() => worker.terminate());
 
   return {
     preloading: computed(() => state.value.preloading),
@@ -131,7 +133,6 @@ export function useCompiler() {
     typecheck,
     preload,
     codeCompletion,
-    terminate,
   };
 }
 

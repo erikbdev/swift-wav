@@ -13,7 +13,7 @@ import LoadingCompiler from "./components/LoadingCompiler.vue";
 import type { Diagnostic } from "./types/compiler";
 
 const { workspace, fileNames, deleteFile, createFile, updateFile, selectFile } = useWorkspace();
-const { preloading, compiling, typechecking, diagnostics, output, preload, compile, typecheck, codeCompletion, terminate } = useCompiler();
+const { preloading, compiling, typechecking, diagnostics, output, preload, compile, typecheck, codeCompletion } = useCompiler();
 
 const codeEditor = useTemplateRef("editor");
 let typecheckTimer: ReturnType<typeof setTimeout> | undefined;
@@ -28,13 +28,8 @@ watch(
   { deep: true },
 );
 
-onBeforeMount(() => {
-  preload();
-});
-
 onBeforeUnmount(() => {
   clearTimeout(typecheckTimer);
-  terminate();
 });
 
 function deleteClicked(filename: string) {

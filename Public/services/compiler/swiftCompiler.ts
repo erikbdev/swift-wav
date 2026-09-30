@@ -45,7 +45,6 @@ export function createSwiftCompiler(toolchain: Toolchain) {
     const swiftwavPreopen = () => new PreopenDirectory("/lib", swiftwav.contents);
 
     return {
-      // Typecheck the complete workspace without linking or executing it.
       async typecheck(files: SourceFiles) {
         try {
           const buildDir = new Map();
@@ -75,10 +74,7 @@ export function createSwiftCompiler(toolchain: Toolchain) {
         }
       },
 
-      // Compiles every file in the workspace as one module (whole-module
-      // optimization is implicit whenever swift-frontend is given more than
-      // one input and no `-primary-file`) and runs the result.
-      async run(files: SourceFiles) {
+      async compile(files: SourceFiles) {
         try {
           const buildDir = new Map();
           for (const [name, content] of Object.entries(files)) {
@@ -165,6 +161,8 @@ export function createSwiftCompiler(toolchain: Toolchain) {
             };
           }
 
+          // TODO: pass this program to useEngine (somehow?)
+
           // 3. Run the freshly linked program itself. Its stdout is the
           // program's own output, not a diagnostic; its stderr only becomes a
           // diagnostic when the run actually fails (a trap or non-zero exit),
@@ -191,7 +189,7 @@ export function createSwiftCompiler(toolchain: Toolchain) {
       // normally the start of the identifier being typed, with every other workspace file
       // loaded alongside it so completion sees declarations from the whole
       // module, and returns the parsed completion list.
-      async autocomplete(files: SourceFiles, activeFile: string, offset: number) {
+      async codecompletion(files: SourceFiles, activeFile: string, offset: number) {
         try {
           const ideTest = await toolchain.ideTest();
 

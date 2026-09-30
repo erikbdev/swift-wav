@@ -13,7 +13,7 @@ const DIAGNOSTIC_LINE = /^(.+?):(\d+):(\d+):\s*(error|warning|note):\s*(.*)$/;
  * error diagnostic carrying the whole blob when nothing matches the format,
  * since tools like wasm-ld don't emit file:line:col diagnostics.
  */
-export function parseDiagnostics(lines: string[]): Diagnostic[] {
+export function parseDiagnostics(lines: string[], stripBase: RegExp = /^\/build\//): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
 
   for (const rawLine of lines) {
@@ -21,7 +21,7 @@ export function parseDiagnostics(lines: string[]): Diagnostic[] {
     if (match) {
       const [, file, line, column, severity, message] = match;
       diagnostics.push({
-        file: file.replace(/^\/build\//, ""),
+        file: file.replace(stripBase, ""),
         line: Number(line),
         column: Number(column),
         severity: severity as Diagnostic["severity"],

@@ -1,7 +1,3 @@
-// Worker that owns the Swift toolchain, so compiling, linking, and code
-// completion don't jank the main thread. It only maps messages to the
-// compiler; see swiftCompiler.ts and toolchain.ts for the work itself.
-
 import type { WorkerRequest, WorkerResponse } from "../../types/compiler";
 import { createSwiftCompiler } from "./swiftCompiler";
 import { fetchToolchains } from "./toolchain";
@@ -12,11 +8,6 @@ function post(message: WorkerResponse): void {
 
 const swiftCompiler = createSwiftCompiler(fetchToolchains((progress) => post({ id: -1, type: "preload", progress })));
 
-/**
- * The newest completion request's id. Each swift-ide-test run blocks the
- * worker for seconds while the user keeps typing, so completion requests
- * queue up behind it; only the newest one's result is still wanted.
- */
 let latestCompletionId = -1;
 
 self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
@@ -26,7 +17,6 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
     case "preload": {
       try {
         await swiftCompiler();
-        post({ id: -1, type: msg.type, progress: 1.0 });
         post({ id: msg.id, type: msg.type, progress: 1.0 });
       } catch (e) {
         post({ id: msg.id, type: msg.type, error: e });
@@ -34,7 +24,7 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
       break;
     }
 
-    case "complete": {
+    case "codecompletion": {
       latestCompletionId = msg.id;
       try {
         const compiler = await swiftCompiler();
@@ -45,7 +35,7 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
           post({ id: msg.id, type: msg.type, error: new Error("Superseded by a newer completion request") });
           return;
         }
-        const { items, diagnostics } = await compiler.autocomplete(msg.files, msg.primaryFile, msg.offset);
+        const { items, diagnostics } = await compiler.codecompletion(msg.files, msg.primaryFile, msg.offset);
         post({ id: msg.id, type: msg.type, items, diagnostics });
       } catch (e) {
         post({ id: msg.id, type: msg.type, error: e });
@@ -67,14 +57,10 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
     case "compile": {
       try {
         const compiler = await swiftCompiler();
-        const result = await compiler.run(msg.files);
+        const result = await compiler.compile(msg.files);
         post({ id: msg.id, type: msg.type, ...result });
       } catch (e) {
-        post({
-          id: msg.id,
-          type: msg.type,
-          error: e,
-        });
+        post({ id: msg.id, type: msg.type, error: e });
       }
       break;
     }
