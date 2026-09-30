@@ -68,6 +68,10 @@ import SwiftWAV
 struct MySong: Song {
   var body: some Timeline {
     Track("Drums") {
+      Sample("kick.wav")
+      Sample("hihat.wav")
+      Sample("snare.wav")
+      Sample("clap.wav")
     }
   }
 }

@@ -1,9 +1,11 @@
-import { computed, onBeforeMount, onBeforeUnmount, onMounted, ref, toRaw, toValue } from "vue";
+import { computed, onBeforeMount, onBeforeUnmount, ref, toRaw } from "vue";
 import SwiftWorker from "../services/compiler/worker.ts?worker";
 import type { Workspace } from "../types/workspace";
 import type { Output, Diagnostic, WorkerRequest, WorkerResponse } from "../types/compiler";
 
 export function useCompiler() {
+  let nextRequestId = 0;
+  const worker = new SwiftWorker();
   const state = ref({
     preloading: null as number | unknown | null,
     compiling: false,
@@ -11,9 +13,6 @@ export function useCompiler() {
     diagnostics: [] as Diagnostic[],
     output: [] as Output[],
   });
-
-  let nextRequestId = 0;
-  const worker = new SwiftWorker();
 
   worker.addEventListener("message", (event: MessageEvent<WorkerResponse>) => {
     const message = event.data;
@@ -97,7 +96,7 @@ export function useCompiler() {
     state.value.typechecking = true;
 
     try {
-      const result = await request({ type: "typecheck", files: toValue(workspace.files) });
+      const result = await request({ type: "typecheck", files: toRaw(workspace.files) });
       state.value.diagnostics = result.diagnostics ?? [];
     } catch (error) {
       state.value.diagnostics = [
