@@ -13,7 +13,7 @@ import LoadingCompiler from "./components/LoadingCompiler.vue";
 import type { Diagnostic } from "./types/compiler";
 
 const { workspace, fileNames, deleteFile, createFile, updateFile, selectFile } = useWorkspace();
-const { loading, compiling, typechecking, diagnostics, output, preload, compile, typecheck, codeCompletion, terminate } = useCompiler();
+const { preloading, compiling, typechecking, diagnostics, output, preload, compile, typecheck, codeCompletion, terminate } = useCompiler();
 
 const codeEditor = useTemplateRef("editor");
 let typecheckTimer: ReturnType<typeof setTimeout> | undefined;
@@ -51,7 +51,7 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
 </script>
 <template>
   <div class="app">
-    <TopBar :disabled="!compiling && loading === 1.0" @run="() => compile(workspace)" />
+    <TopBar :disabled="preloading != 1.0 || compiling" @run="() => compile(workspace)" />
 
     <div class="body">
       <main class="editor-column">
@@ -60,7 +60,13 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
         <CompilerConsole :diagnostics="diagnostics" :output="output" :activity="null" @reveal="revealDiagnostic" />
       </main>
 
-      <LoadingCompiler v-if="loading !== 1.0" :status="''" :error="loading?.message" :progress="typeof loading === 'number' ? loading : undefined" @retry="preload" />
+      <LoadingCompiler
+        v-if="preloading !== 1.0"
+        :status="''"
+        :error="preloading instanceof Error ? preloading.message : undefined"
+        :progress="typeof preloading === 'number' ? preloading : undefined"
+        @retry="preload"
+      />
       <TimelinePanel v-else />
     </div>
   </div>

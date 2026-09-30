@@ -5,7 +5,7 @@ import type { Output, Diagnostic, WorkerRequest, WorkerResponse } from "../types
 
 const worker = new SwiftWorker();
 const state = ref({
-  loading: null as number | unknown | null,
+  preloading: null as number | unknown | null,
   compiling: false,
   typechecking: false,
   diagnostics: [] as Diagnostic[],
@@ -18,9 +18,9 @@ worker.addEventListener("message", (event: MessageEvent<WorkerResponse>) => {
   const message = event.data;
   if (message.id !== -1 || message.type !== "preload") return;
   if (message.error) {
-    state.value.loading = message.error;
+    state.value.preloading = message.error;
   } else {
-    state.value.loading = message.progress ?? null;
+    state.value.preloading = message.progress ?? null;
   }
 });
 
@@ -55,18 +55,9 @@ export function useCompiler() {
   async function preload() {
     try {
       const result = await request({ type: "preload" });
-      state.value.loading = result.progress ?? 1.0;
+      state.value.preloading = result.progress ?? 1.0;
     } catch (error) {
-      state.value.loading = error;
-      state.value.diagnostics = [
-        {
-          severity: "error",
-          file: null,
-          line: null,
-          column: null,
-          message: `Failed to setup compiler:\n\t ${errorMessage(error)}`,
-        },
-      ];
+      state.value.preloading = error;
     }
   }
 
@@ -131,7 +122,7 @@ export function useCompiler() {
   }
 
   return {
-    loading: computed(() => state.value.loading),
+    preloading: computed(() => state.value.preloading),
     compiling: computed(() => state.value.compiling),
     typechecking: computed(() => state.value.typechecking),
     diagnostics: computed(() => state.value.diagnostics),
