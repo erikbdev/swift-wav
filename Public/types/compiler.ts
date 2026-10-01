@@ -45,7 +45,7 @@ export type WorkerRequest =
   | { id: number; type: "preload" }
   | { id: number; type: "typecheck"; files: SourceFiles }
   | { id: number; type: "compile"; files: SourceFiles }
-  | { id: number; type: "codecompletion"; files: SourceFiles; primaryFile: string; offset: number };
+  | { id: number; type: "codecompletion"; files: SourceFiles; activeFile: string; offset: number };
 
 export type WorkerResponse =
   | { id: number; type: "preload"; progress?: number; error?: unknown }

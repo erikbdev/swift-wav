@@ -78,7 +78,7 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
 
           const buildDir = new Map();
           for (let [name, content] of Object.entries(msg.files)) {
-            if (name === msg.primaryFile) {
+            if (name === msg.activeFile) {
               const clampedOffset = Math.max(0, Math.min(msg.offset, content.length));
               content = content.slice(0, clampedOffset) + `#^${COMPLETION_TOKEN}^#` + content.slice(clampedOffset);
               console.log(`[swift-ide-test] source (${name}):\n${content}`);
@@ -95,11 +95,11 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
             "swift-ide-test",
             "-code-completion",
             "-source-filename",
-            `/build/${msg.primaryFile}`,
+            `/build/${msg.activeFile}`,
             `-code-completion-token=${COMPLETION_TOKEN}`,
             "-code-completion-sourcetext",
             ...(Object.keys(msg.files).includes("main.swift") ? [] : ["-parse-as-library"]),
-            ...[...buildDir.keys()].flatMap((n) => (n === msg.primaryFile ? [] : [`/build/${n}`])),
+            ...[...buildDir.keys()].flatMap((n) => (n === msg.activeFile ? [] : [`/build/${n}`])),
             ...commonFrontendArgs,
           ];
 
