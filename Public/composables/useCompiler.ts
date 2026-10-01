@@ -7,7 +7,7 @@ export function useCompiler() {
   let nextRequestId = 0;
   const worker = new SwiftWorker();
   const state = ref({
-    preloading: null as number | unknown | null,
+    preloaded: null as number | unknown | null,
     compiling: false,
     typechecking: false,
     diagnostics: [] as Diagnostic[],
@@ -18,9 +18,9 @@ export function useCompiler() {
     const message = event.data;
     if (message.id !== -1 || message.type !== "preload") return;
     if (message.error) {
-      state.value.preloading = message.error;
+      state.value.preloaded = message.error;
     } else {
-      state.value.preloading = message.progress ?? null;
+      state.value.preloaded = message.progress ?? null;
     }
   });
 
@@ -57,9 +57,9 @@ export function useCompiler() {
   async function preload() {
     try {
       const result = await request({ type: "preload" });
-      state.value.preloading = result.progress ?? 1.0;
+      state.value.preloaded = result.progress ?? 1.0;
     } catch (error) {
-      state.value.preloading = error;
+      state.value.preloaded = error;
     }
   }
 
@@ -71,7 +71,6 @@ export function useCompiler() {
     state.value.output = [];
 
     try {
-      await preload();
       const result = await request({ type: "compile", files: toRaw(workspace.files) });
       state.value.diagnostics = result.diagnostics ?? [];
       state.value.output = result.output ?? [];
@@ -123,7 +122,7 @@ export function useCompiler() {
   onBeforeUnmount(() => worker.terminate());
 
   return {
-    preloading: computed(() => state.value.preloading),
+    preloading: computed(() => state.value.preloaded),
     compiling: computed(() => state.value.compiling),
     typechecking: computed(() => state.value.typechecking),
     diagnostics: computed(() => state.value.diagnostics),

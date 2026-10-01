@@ -1,11 +1,10 @@
-
 export function memoize<T>(fn: () => T | Promise<T>) {
-  let state: { id: number, value: T | Promise<T> } | null = null;
+  let state: { id: number; value: T | Promise<T> } | null = null;
   return Object.assign(
     () => {
       if (state) return state.value;
 
-      const id = Date.now()
+      const id = Date.now();
       const value = fn();
       if (value instanceof Promise) {
         state = {
@@ -15,12 +14,12 @@ export function memoize<T>(fn: () => T | Promise<T>) {
               state = null;
             }
             throw e;
-          })
+          }),
         };
       } else {
-        state = { id, value }
+        state = { id, value };
       }
-      return state.value
+      return state.value;
     },
     {
       discard() {
