@@ -28,7 +28,7 @@ const commonFrontendArgs = [
 
 const toolchain = fetchToolchains((progress) => post({ id: -1, type: "preload", progress }));
 
-const modules = memoize(async () => {
+const toolchainModules = memoize(async () => {
   try {
     const [frontend, ideTest, linker, sysroot, libSwiftWAV] = await Promise.all([toolchain.frontend(), toolchain.ideTest(), toolchain.linker(), toolchain.sysroot(), toolchain.libSwiftWAV()]);
     const moduleCache = new Directory(new Map());
@@ -41,7 +41,6 @@ const modules = memoize(async () => {
       frontend,
       ideTest,
       linker,
-      sysroot,
       libSwiftWAV,
       sysrootPreopen,
       moduleCachePreopen,
@@ -63,7 +62,7 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
   switch (msg.type) {
     case "preload": {
       try {
-        await modules();
+        await toolchainModules();
         post({ id: msg.id, type: msg.type, progress: 1.0 });
       } catch (e) {
         post({ id: msg.id, type: msg.type, error: e });
@@ -74,14 +73,14 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
     case "codecompletion":
       {
         try {
-          const { ideTest, sysrootPreopen, moduleCachePreopen, libSwiftWAVPreopen } = await modules();
+          const { ideTest, sysrootPreopen, moduleCachePreopen, libSwiftWAVPreopen } = await toolchainModules();
 
           const buildDir = new Map();
           for (let [name, content] of Object.entries(msg.files)) {
             if (name === msg.activeFile) {
               const clampedOffset = Math.max(0, Math.min(msg.offset, content.length));
               content = content.slice(0, clampedOffset) + `#^${COMPLETION_TOKEN}^#` + content.slice(clampedOffset);
-              console.log(`[swift-ide-test] source (${name}):\n${content}`);
+              console.trace(`[swift-ide-test] source (${name}):\n${content}`);
             }
             buildDir.set(name, new File(new TextEncoder().encode(content)));
           }
@@ -104,11 +103,12 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
           ];
 
           const result = await runWASICommand(ideTest, argv, [buildPreopen(), sysrootPreopen(), moduleCachePreopen(), libSwiftWAVPreopen()]);
-          console.log("[swift-ide-test] stdout:", result.stdout, "stderr:", result.stderr);
+          console.trace("[swift-ide-test] stdout:", result.stdout, "stderr:", result.stderr);
 
           post({ id: msg.id, type: msg.type, items: parseCompletionResults(result.stdout), diagnostics: [] });
         } catch (e) {
-          modules.discard();
+          console.trace("[compiler/worker.js] (codecompletion) error:", e);
+          toolchainModules.discard();
           post({ id: msg.id, type: msg.type, error: e });
         }
       }
@@ -116,7 +116,7 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
 
     case "typecheck": {
       try {
-        const { frontend, sysrootPreopen, moduleCachePreopen, libSwiftWAVPreopen } = await modules();
+        const { frontend, sysrootPreopen, moduleCachePreopen, libSwiftWAVPreopen } = await toolchainModules();
         const buildDir = new Map();
         for (const [name, content] of Object.entries(msg.files)) {
           buildDir.set(name, new File(new TextEncoder().encode(content)));
@@ -140,7 +140,8 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
 
         post({ id: msg.id, type: msg.type, exitCode: result.exitCode, diagnostics: parseDiagnostics(result.stderr) });
       } catch (e) {
-        modules.discard();
+        console.trace("[compiler/worker.js] (typecheck) error:", e);
+        toolchainModules.discard();
         post({ id: msg.id, type: msg.type, error: e });
       }
       break;
@@ -148,8 +149,7 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
 
     case "compile": {
       try {
-        // const compiler = await swiftCompiler();
-        const { frontend, linker, sysroot, sysrootPreopen, moduleCachePreopen, libSwiftWAVPreopen } = await modules();
+        const { frontend, linker, sysrootPreopen, moduleCachePreopen, libSwiftWAVPreopen } = await toolchainModules();
 
         const buildDir = new Map();
         for (const [name, content] of Object.entries(msg.files)) {
@@ -175,7 +175,7 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
           ],
           [buildPreopen(), sysrootPreopen(), moduleCachePreopen(), libSwiftWAVPreopen()],
         );
-        console.log("[swift-frontend] stdout:", frontendResult.stdout, "stderr:", frontendResult.stderr);
+        console.trace("[swift-frontend] stdout:", frontendResult.stdout, "stderr:", frontendResult.stderr);
 
         if (frontendResult.exitCode !== 0) {
           post({
@@ -230,7 +230,7 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
           ],
           [buildPreopen(), sysrootPreopen(), libSwiftWAVPreopen()],
         );
-        console.log("[wasm-ld] stdout:", linkResult.stdout, "stderr:", linkResult.stderr);
+        console.trace("[wasm-ld] stdout:", linkResult.stdout, "stderr:", linkResult.stderr);
         const programFile = buildDir.get("main.wasm");
         if (linkResult.exitCode !== 0 || !(programFile instanceof File)) {
           post({
@@ -243,7 +243,7 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
           return;
         }
 
-        // TODO: pass this program to useEngine (somehow?)
+        // TODO: pass this program to useEngine without creating a new copy (somehow?)
 
         // 3. Run the freshly linked program itself. Its stdout is the
         // program's own output, not a diagnostic; its stderr only becomes a
@@ -251,7 +251,7 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
         // since a well-behaved program is free to write to stderr as output.
         const programModule = await WebAssembly.compile(programFile.data as BufferSource);
         const runResult = await runWASICommand(programModule, ["main"], []);
-        console.log("[program] stdout:", runResult.stdout, "stderr: ", runResult.stderr);
+        console.trace("[program] stdout:", runResult.stdout, "stderr: ", runResult.stderr);
 
         const timestamp = Date.now();
         post({
@@ -263,6 +263,8 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
           diagnostics: runResult.exitCode === 0 ? frontendDiagnostics : [...frontendDiagnostics, ...parseDiagnostics(runResult.stderr)],
         });
       } catch (e) {
+        console.trace("[compiler/worker.js] (compile) error:", e);
+        toolchainModules.discard();
         post({ id: msg.id, type: msg.type, error: e });
       }
       break;
