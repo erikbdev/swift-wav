@@ -3,11 +3,9 @@ import { untar } from "../../utils/tar";
 
 const TOOLCHAIN_BASE = "/toolchain";
 
-const REQUIRED_DOWNLOADS = 4;
+const REQUIRED_DOWNLOADS = 5;
 
-export type Toolchain = ReturnType<typeof fetchToolchains>;
-
-export function fetchToolchains(onProgress: (progress: number) => void) {
+export function fetchToolchain() {
   const completedDownloads = new Set<string>();
 
   /**
@@ -26,7 +24,6 @@ export function fetchToolchains(onProgress: (progress: number) => void) {
           const { done, value } = await reader.read();
           if (done) {
             completedDownloads.add(url);
-            onProgress(Math.min(completedDownloads.size / REQUIRED_DOWNLOADS, 1.0));
             controller.close();
             return;
           }

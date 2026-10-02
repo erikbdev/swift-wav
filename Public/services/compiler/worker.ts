@@ -1,7 +1,7 @@
 import { Directory, PreopenDirectory, File } from "@bjorn3/browser_wasi_shim";
 import type { WorkerRequest, WorkerResponse } from "../../types/compiler";
 import { memoize } from "../../utils/memoize";
-import { fetchToolchains } from "./toolchain";
+import { fetchToolchain } from "./toolchain";
 import { runWASICommand } from "../../utils/wasi-run";
 import { parseCompletionResults } from "./completion";
 import { parseDiagnostics } from "./diagnostics";
@@ -26,7 +26,7 @@ const commonFrontendArgs = [
   "/lib",
 ];
 
-const toolchain = fetchToolchains((progress) => post({ id: -1, type: "preload", progress }));
+const toolchain = fetchToolchain();
 
 const toolchainModules = memoize(async () => {
   try {
@@ -36,6 +36,8 @@ const toolchainModules = memoize(async () => {
     const sysrootPreopen = () => new PreopenDirectory("/sysroot", sysroot.contents);
     const moduleCachePreopen = () => new PreopenDirectory("/module-cache", moduleCache.contents);
     const libSwiftWAVPreopen = () => new PreopenDirectory("/lib", libSwiftWAV.contents);
+
+    post({ id: -1, type: "preload", progress: 1.0 });
 
     return {
       frontend,
@@ -175,7 +177,8 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
           ],
           [buildPreopen(), sysrootPreopen(), moduleCachePreopen(), libSwiftWAVPreopen()],
         );
-        console.trace("[swift-frontend] stdout:", frontendResult.stdout, "stderr:", frontendResult.stderr);
+
+        console.trace("[compiler/worker.js] (compiler/swift-frontend) stdout:", frontendResult.stdout, "stderr:", frontendResult.stderr, "exitcode:", frontendResult.exitCode);
 
         if (frontendResult.exitCode !== 0) {
           post({
@@ -192,7 +195,7 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
         // through so a clean compile doesn't silently drop them.
         const frontendDiagnostics = parseDiagnostics(frontendResult.stderr);
 
-        const linkResult = await runWASICommand(
+        const linkerResult = await runWASICommand(
           linker,
           [
             "wasm-ld",
@@ -230,15 +233,15 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
           ],
           [buildPreopen(), sysrootPreopen(), libSwiftWAVPreopen()],
         );
-        console.trace("[wasm-ld] stdout:", linkResult.stdout, "stderr:", linkResult.stderr);
+        console.trace("[compiler/worker.js] (compiler/wasm-ld) stdout:", linkerResult.stdout, "stderr:", linkerResult.stderr, "errorcode:", linkerResult.exitCode);
         const programFile = buildDir.get("main.wasm");
-        if (linkResult.exitCode !== 0 || !(programFile instanceof File)) {
+        if (linkerResult.exitCode !== 0 || !(programFile instanceof File)) {
           post({
             id: msg.id,
             type: msg.type,
             stage: "linker",
-            exitCode: linkResult.exitCode,
-            diagnostics: [...frontendDiagnostics, ...parseDiagnostics(linkResult.stderr)],
+            exitCode: linkerResult.exitCode,
+            diagnostics: [...frontendDiagnostics, ...parseDiagnostics(linkerResult.stderr)],
           });
           return;
         }
@@ -251,7 +254,7 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
         // since a well-behaved program is free to write to stderr as output.
         const programModule = await WebAssembly.compile(programFile.data as BufferSource);
         const runResult = await runWASICommand(programModule, ["main"], []);
-        console.trace("[program] stdout:", runResult.stdout, "stderr: ", runResult.stderr);
+        console.trace("(compiler/worker.js) (compiler/run program) stdout:", runResult.stdout, "stderr: ", runResult.stderr, "exitCode:", runResult.exitCode);
 
         const timestamp = Date.now();
         post({

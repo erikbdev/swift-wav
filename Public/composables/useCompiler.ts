@@ -14,16 +14,6 @@ export function useCompiler() {
     output: [] as Output[],
   });
 
-  worker.addEventListener("message", (event: MessageEvent<WorkerResponse>) => {
-    const message = event.data;
-    if (message.id !== -1 || message.type !== "preload") return;
-    if (message.error) {
-      state.value.preloaded = message.error;
-    } else {
-      state.value.preloaded = message.progress ?? null;
-    }
-  });
-
   function request<T extends Omit<WorkerRequest, "id">>(payload: T): Promise<Extract<WorkerResponse, { type: T["type"] }>> {
     const id = ++nextRequestId;
 
@@ -55,7 +45,10 @@ export function useCompiler() {
   }
 
   async function preload() {
+    if (state.value.preloaded === 1.0) return;
+
     try {
+      state.value.preloaded = 0.0;
       const result = await request({ type: "preload" });
       state.value.preloaded = result.progress ?? 1.0;
     } catch (error) {
