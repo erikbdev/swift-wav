@@ -41,6 +41,18 @@ export type CompletionItem = {
   closesCall: boolean;
 };
 
+export type CodeCompletionV2 = {
+  label: string;
+  filterText: string;
+  module?: string;
+  typeName?: string;
+
+  textEdit: unknown;
+  kind: unknown;
+
+  isSystem: boolean;
+};
+
 export type WorkerRequest =
   | { id: number; type: "preload" }
   | { id: number; type: "typecheck"; files: SourceFiles }

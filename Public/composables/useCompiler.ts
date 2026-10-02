@@ -107,7 +107,7 @@ export function useCompiler() {
 
   async function codeCompletion(workspace: Workspace, offset: number) {
     if (!workspace.active) return [];
-    const result = await request({ type: "codecompletion", files: toRaw(workspace.files), primaryFile: toRaw(workspace.active), offset });
+    const result = await request({ type: "codecompletion", files: toRaw(workspace.files), activeFile: toRaw(workspace.active), offset });
     return result.items ?? [];
   }
 
