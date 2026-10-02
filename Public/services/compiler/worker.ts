@@ -29,29 +29,22 @@ const commonFrontendArgs = [
 const toolchain = fetchToolchain();
 
 const toolchainModules = memoize(async () => {
-  try {
-    const [frontend, ideTest, linker, sysroot, libSwiftWAV] = await Promise.all([toolchain.frontend(), toolchain.ideTest(), toolchain.linker(), toolchain.sysroot(), toolchain.libSwiftWAV()]);
-    const moduleCache = new Directory(new Map());
+  const [frontend, ideTest, linker, sysroot, libSwiftWAV] = await Promise.all([toolchain.frontend(), toolchain.ideTest(), toolchain.linker(), toolchain.sysroot(), toolchain.libSwiftWAV()]);
+  const moduleCache = new Directory(new Map());
 
-    const sysrootPreopen = () => new PreopenDirectory("/sysroot", sysroot.contents);
-    const moduleCachePreopen = () => new PreopenDirectory("/module-cache", moduleCache.contents);
-    const libSwiftWAVPreopen = () => new PreopenDirectory("/lib", libSwiftWAV.contents);
+  const sysrootPreopen = () => new PreopenDirectory("/sysroot", sysroot.contents);
+  const moduleCachePreopen = () => new PreopenDirectory("/module-cache", moduleCache.contents);
+  const libSwiftWAVPreopen = () => new PreopenDirectory("/lib", libSwiftWAV.contents);
 
-    post({ id: -1, type: "preload", progress: 1.0 });
-
-    return {
-      frontend,
-      ideTest,
-      linker,
-      libSwiftWAV,
-      sysrootPreopen,
-      moduleCachePreopen,
-      libSwiftWAVPreopen,
-    };
-  } catch (e) {
-    post({ id: -1, type: "preload", error: e });
-    throw e;
-  }
+  return {
+    frontend,
+    ideTest,
+    linker,
+    libSwiftWAV,
+    sysrootPreopen,
+    moduleCachePreopen,
+    libSwiftWAVPreopen,
+  };
 });
 
 function post(message: WorkerResponse): void {
