@@ -59,6 +59,8 @@ export function useCompiler() {
   async function compile(workspace: Workspace) {
     if (state.value.compiling) return;
 
+    await preload();
+
     state.value.compiling = true;
     state.value.diagnostics = [];
     state.value.output = [];
@@ -83,7 +85,7 @@ export function useCompiler() {
   }
 
   async function typecheck(workspace: Workspace) {
-    if (state.value.typechecking || state.value.compiling) return;
+    if (state.value.preloaded !== 1.0 || state.value.typechecking || state.value.compiling) return;
 
     state.value.typechecking = true;
 
@@ -106,7 +108,8 @@ export function useCompiler() {
   }
 
   async function codeCompletion(workspace: Workspace, offset: number) {
-    if (!workspace.active) return [];
+    if (!workspace.active || state.value.preloaded !== 1.0) return [];
+
     const result = await request({ type: "codecompletion", files: toRaw(workspace.files), activeFile: toRaw(workspace.active), offset });
     return result.items ?? [];
   }

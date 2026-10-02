@@ -102,8 +102,6 @@ where Provider.FileAttributes: FileMiddlewareFileAttributes {
       let variantRequest = Request(head: variantHead, body: request.body)
 
       do {
-        // A variant probe must only look for a file. Calling the real `next`
-        // here could execute the route once for every candidate.
         var response = try await fileMiddleware.handle(
           variantRequest,
           context: context

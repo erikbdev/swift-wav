@@ -97,9 +97,6 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
 
           const buildPreopen = () => new PreopenDirectory("/build", buildDir);
 
-          // -source-filename is the file the token lives in; the rest of the
-          // module is given positionally so declarations in other files are
-          // in scope too.
           const argv = [
             "swift-ide-test",
             "-code-completion",
