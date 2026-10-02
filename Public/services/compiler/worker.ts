@@ -1,11 +1,13 @@
-import { Directory, PreopenDirectory, File } from "@bjorn3/browser_wasi_shim";
 import type { WorkerRequest, WorkerResponse } from "../../types/compiler";
-import { memoize } from "../../utils/memoize";
-import { fetchToolchain } from "./toolchain";
-import { runWASICommand } from "../../utils/wasi-run";
+
+import { Directory, PreopenDirectory, File } from "@bjorn3/browser_wasi_shim";
 import { parseCompletionResults } from "./completion";
 import { parseDiagnostics } from "./diagnostics";
+import { untar } from "../../utils/tar";
+import { memoize } from "../../utils/memoize";
+import { runWASICommand } from "../../utils/wasi-run";
 
+const TOOLCHAIN_BASE = "/toolchain";
 const COMPLETION_TOKEN = "COMPLETE";
 
 const commonFrontendArgs = [
@@ -26,24 +28,37 @@ const commonFrontendArgs = [
   "/lib",
 ];
 
-const toolchain = fetchToolchain();
+const toolchain = {
+  frontend: memoize(() => WebAssembly.compileStreaming(fetch(`${TOOLCHAIN_BASE}/swift-frontend.wasm`))),
+  linker: memoize(() => WebAssembly.compileStreaming(fetch(`${TOOLCHAIN_BASE}/wasm-ld.wasm`))),
+  ideTest: memoize(() => WebAssembly.compileStreaming(fetch(`${TOOLCHAIN_BASE}/swift-ide-test.wasm`))),
+  sysroot: memoize(() =>
+    fetch(`${TOOLCHAIN_BASE}/swift-sysroot-core.tar`)
+      .then((r) => r.arrayBuffer())
+      .then(untar),
+  ),
+  libSwiftWAV: memoize(() =>
+    fetch(`${TOOLCHAIN_BASE}/libSwiftWAV.tar`)
+      .then((r) => r.arrayBuffer())
+      .then(untar),
+  ),
+};
 
 const toolchainModules = memoize(async () => {
   const [frontend, ideTest, linker, sysroot, libSwiftWAV] = await Promise.all([toolchain.frontend(), toolchain.ideTest(), toolchain.linker(), toolchain.sysroot(), toolchain.libSwiftWAV()]);
   const moduleCache = new Directory(new Map());
 
   const sysrootPreopen = () => new PreopenDirectory("/sysroot", sysroot.contents);
-  const moduleCachePreopen = () => new PreopenDirectory("/module-cache", moduleCache.contents);
   const libSwiftWAVPreopen = () => new PreopenDirectory("/lib", libSwiftWAV.contents);
+  const moduleCachePreopen = () => new PreopenDirectory("/module-cache", moduleCache.contents);
 
   return {
     frontend,
     ideTest,
     linker,
-    libSwiftWAV,
     sysrootPreopen,
-    moduleCachePreopen,
     libSwiftWAVPreopen,
+    moduleCachePreopen,
   };
 });
 

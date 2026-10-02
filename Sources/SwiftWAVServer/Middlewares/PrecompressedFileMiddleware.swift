@@ -111,9 +111,8 @@ where Provider.FileAttributes: FileMiddlewareFileAttributes {
           throw HTTPError(.notFound)
         }
 
-        if response.headers[.contentType] == nil {
-          response.headers[.contentType] = file.contentType
-        }
+        response.headers[.contentType] = file.contentType
+
         if response.headers[.cacheControl] == nil, let cacheControl = file.cacheControl {
           response.headers[.cacheControl] = cacheControl
         }
