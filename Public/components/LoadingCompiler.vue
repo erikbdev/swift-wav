@@ -1,16 +1,24 @@
 <script setup lang="ts" vapor>
-withDefaults(
-  defineProps<{
-    status?: string;
-    error?: string | null;
-    progress?: number;
-  }>(),
-  {
-    status: "Downloading Swift toolchain…",
-    error: null,
-    progress: 0,
-  },
-);
+import { computed } from "vue";
+
+const props = defineProps<{
+  state: unknown; // null = pending, 0.0 = preloading, 1.0 = preloaded, anything else = error
+}>();
+
+const starting = computed(() => props.state === null || props.state === undefined);
+
+const loading = computed(() => {
+  if (typeof props.state === "number") {
+    return props.state !== 1.0;
+  } else {
+    return false;
+  }
+});
+
+const error = computed(() => {
+  if (props.state == null || typeof props.state === "number") return null;
+  return props.state instanceof Error ? props.state.message : String(props.state);
+});
 
 const emit = defineEmits<{
   retry: [];
@@ -21,18 +29,12 @@ const emit = defineEmits<{
   <aside class="runtime-panel" aria-live="polite">
     <div class="runtime-content">
       <div class="runtime-message">
-        <span class="runtime-marker" :class="{ error }" aria-hidden="true">
-          <span v-if="error">!</span>
-          <span v-else class="runtime-spinner"></span>
-        </span>
-
         <div class="runtime-copy">
           <div class="track-name">{{ error ? "Toolchain unavailable" : "Preparing compiler" }}</div>
-          <div class="track-type">SWIFT TOOLCHAIN</div>
-          <p>{{ error ? "The compiler could not be loaded." : status }}</p>
+          <p>{{ error ? "The compiler could not be loaded." : loading ? "Downloading compiler..." : starting ? "Starting..." : "" }}</p>
 
-          <div v-if="!error" class="runtime-progress" role="progressbar" aria-label="Loading Swift toolchain" :aria-valuenow="Math.round(progress * 100)" aria-valuemin="0" aria-valuemax="100">
-            <span :style="{ width: `${Math.max(progress * 100, 3)}%` }"></span>
+          <div v-if="!error" class="runtime-progress" role="progressbar" aria-label="Loading Swift toolchain">
+            <span></span>
           </div>
           <p v-else class="runtime-error-detail">{{ error }}</p>
 
@@ -146,10 +148,11 @@ const emit = defineEmits<{
 }
 .runtime-progress span {
   display: block;
+  width: 30%;
   height: 100%;
   border-radius: inherit;
   background: var(--accent);
-  transition: width 0.2s ease;
+  animation: runtime-indeterminate 1.2s ease-in-out infinite;
 }
 .runtime-error-detail {
   color: var(--text-2) !important;
@@ -169,6 +172,14 @@ const emit = defineEmits<{
 .runtime-retry:hover {
   border-color: var(--accent-line);
   color: var(--accent-hi);
+}
+@keyframes runtime-indeterminate {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(333%);
+  }
 }
 @keyframes runtime-spin {
   to {

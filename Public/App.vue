@@ -13,7 +13,7 @@ import LoadingCompiler from "./components/LoadingCompiler.vue";
 import type { Diagnostic } from "./types/compiler";
 
 const { workspace, fileNames, deleteFile, createFile, updateFile, selectFile } = useWorkspace();
-const { preloading, compiling, typechecking, diagnostics, output, preload, compile, typecheck, codeCompletion } = useCompiler();
+const { preloading, compiling, diagnostics, output, preload, compile, typecheck, codeCompletion } = useCompiler();
 
 const codeEditor = useTemplateRef("editor");
 let typecheckTimer: ReturnType<typeof setTimeout> | undefined;
@@ -55,13 +55,7 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
         <CompilerConsole :diagnostics="diagnostics" :output="output" :activity="null" @reveal="revealDiagnostic" />
       </main>
 
-      <LoadingCompiler
-        v-if="preloading !== 1.0"
-        :status="''"
-        :error="preloading instanceof Error ? preloading.message : undefined"
-        :progress="typeof preloading === 'number' ? preloading : undefined"
-        @retry="preload"
-      />
+      <LoadingCompiler v-if="preloading !== 1.0" :state="preloading" @retry="preload" />
       <TimelinePanel v-else />
     </div>
   </div>
