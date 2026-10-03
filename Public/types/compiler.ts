@@ -62,5 +62,5 @@ export type WorkerRequest =
 export type WorkerResponse =
   | { id: number; type: "preload"; progress?: number; error?: unknown }
   | { id: number; type: "typecheck"; diagnostics?: Diagnostic[]; exitCode?: number; error?: unknown }
-  | { id: number; type: "compile"; stage?: string; output?: Output[]; diagnostics?: Diagnostic[]; exitCode?: number; error?: unknown }
+  | { id: number; type: "compile"; stage?: string; program?: WebAssembly.Module; diagnostics?: Diagnostic[]; exitCode?: number; error?: unknown }
   | { id: number; type: "codecompletion"; items?: CompletionItem[]; diagnostics?: Diagnostic[]; error?: unknown };

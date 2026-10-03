@@ -251,24 +251,13 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
           return;
         }
 
-        // TODO: pass this program to useEngine without creating a new copy (somehow?)
-
-        // 3. Run the freshly linked program itself. Its stdout is the
-        // program's own output, not a diagnostic; its stderr only becomes a
-        // diagnostic when the run actually fails (a trap or non-zero exit),
-        // since a well-behaved program is free to write to stderr as output.
-        const programModule = await WebAssembly.compile(programFile.data as BufferSource);
-        const runResult = await runWASICommand(programModule, ["main"], []);
-        console.trace("(compiler/worker.js) (compiler/run program) stdout:", runResult.stdout, "stderr: ", runResult.stderr, "exitCode:", runResult.exitCode);
-
-        const timestamp = Date.now();
+        // A compiled module is shared, not copied, when posted to the main thread.
         post({
           id: msg.id,
           type: msg.type,
-          stage: "run",
-          exitCode: runResult.exitCode,
-          output: runResult.stdout.map((message) => ({ message, timestamp })),
-          diagnostics: runResult.exitCode === 0 ? frontendDiagnostics : [...frontendDiagnostics, ...parseDiagnostics(runResult.stderr)],
+          exitCode: linkerResult.exitCode,
+          program: await WebAssembly.compile(programFile.data as BufferSource),
+          diagnostics: frontendDiagnostics,
         });
       } catch (e) {
         console.trace("[compiler/worker.js] (compile) error:", e);

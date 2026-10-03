@@ -2,6 +2,7 @@
 import { nextTick, onBeforeMount, onBeforeUnmount, useTemplateRef, watch } from "vue";
 import { useCompiler } from "./composables/useCompiler";
 import { useWorkspace } from "./composables/useWorkspace";
+import { useEngine } from "./composables/useEngine";
 
 import TopBar from "./components/TopBar.vue";
 import CompilerConsole from "./components/CompilerConsole.vue";
@@ -13,7 +14,8 @@ import LoadingCompiler from "./components/LoadingCompiler.vue";
 import type { Diagnostic } from "./types/compiler";
 
 const { workspace, fileNames, deleteFile, createFile, updateFile, selectFile } = useWorkspace();
-const { preloading, compiling, diagnostics, output, preload, compile, typecheck, codeCompletion } = useCompiler();
+const { preloading, compiling, diagnostics, preload, compile, typecheck, codeCompletion } = useCompiler();
+const { running, output, run } = useEngine();
 
 const codeEditor = useTemplateRef("editor");
 let typecheckTimer: ReturnType<typeof setTimeout> | undefined;
@@ -46,7 +48,7 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
 </script>
 <template>
   <div class="flex h-screen flex-col overflow-hidden bg-bg-0">
-    <TopBar :disabled="preloading != 1.0 || compiling" @run="() => compile(workspace)" />
+    <TopBar :disabled="preloading != 1.0 || compiling || running" @run="() => compile(workspace).then((program) => program && run(program))" />
 
     <div class="flex min-h-0 flex-1 overflow-hidden max-[800px]:flex-col">
       <main class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-1 max-[800px]:min-h-[360px] max-[800px]:flex-[1_1_58%]">

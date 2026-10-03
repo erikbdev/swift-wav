@@ -1,7 +1,7 @@
 import { computed, onBeforeMount, onBeforeUnmount, ref, toRaw } from "vue";
 import SwiftWorker from "../services/compiler/worker.ts?worker";
 import type { Workspace } from "../types/workspace";
-import type { Output, Diagnostic, WorkerRequest, WorkerResponse } from "../types/compiler";
+import type { Diagnostic, WorkerRequest, WorkerResponse } from "../types/compiler";
 
 export function useCompiler() {
   let nextRequestId = 0;
@@ -11,7 +11,6 @@ export function useCompiler() {
     compiling: false,
     typechecking: false,
     diagnostics: [] as Diagnostic[],
-    output: [] as Output[],
   });
 
   function request<T extends Omit<WorkerRequest, "id">>(payload: T): Promise<Extract<WorkerResponse, { type: T["type"] }>> {
@@ -63,12 +62,11 @@ export function useCompiler() {
 
     state.value.compiling = true;
     state.value.diagnostics = [];
-    state.value.output = [];
 
     try {
       const result = await request({ type: "compile", files: toRaw(workspace.files) });
       state.value.diagnostics = result.diagnostics ?? [];
-      state.value.output = result.output ?? [];
+      return result.program;
     } catch (error) {
       state.value.diagnostics = [
         {
@@ -122,7 +120,6 @@ export function useCompiler() {
     compiling: computed(() => state.value.compiling),
     typechecking: computed(() => state.value.typechecking),
     diagnostics: computed(() => state.value.diagnostics),
-    output: computed(() => state.value.output),
     compile,
     typecheck,
     preload,
