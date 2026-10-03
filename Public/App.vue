@@ -45,11 +45,11 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
 }
 </script>
 <template>
-  <div class="app">
+  <div class="flex h-screen flex-col overflow-hidden bg-bg-0">
     <TopBar :disabled="preloading != 1.0 || compiling" @run="() => compile(workspace)" />
 
-    <div class="body">
-      <main class="editor-column">
+    <div class="flex min-h-0 flex-1 overflow-hidden max-[800px]:flex-col">
+      <main class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-1 max-[800px]:min-h-[360px] max-[800px]:flex-[1_1_58%]">
         <FileTabs :files="fileNames" :active="workspace.active" @select="selectFile" @create="createFile" @delete="deleteClicked" />
         <CodeEditor ref="editor" :workspace="workspace" :complete="(p) => codeCompletion(workspace, p)" @change="updateFile" />
         <CompilerConsole :diagnostics="diagnostics" :output="output" :activity="null" @reveal="revealDiagnostic" />
@@ -60,40 +60,3 @@ async function revealDiagnostic(diagnostic: Diagnostic) {
     </div>
   </div>
 </template>
-
-<style scoped>
-.app {
-  height: 100vh;
-  background: var(--bg-0);
-  overflow: hidden;
-}
-
-.body {
-  display: flex;
-  min-height: 0;
-  height: calc(100% - var(--topbar-h));
-  overflow: hidden;
-}
-
-.editor-column {
-  position: relative;
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  background: var(--bg-1);
-}
-
-@media (max-width: 800px) {
-  .body {
-    flex-direction: column;
-  }
-
-  .editor-column {
-    flex: 1 1 58%;
-    min-height: 360px;
-  }
-}
-</style>

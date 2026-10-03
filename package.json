@@ -22,10 +22,12 @@
     "vue": "3.6.0-rc.6"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^22.20.3",
     "@vitejs/plugin-vue": "6.0.8",
     "@vue/compiler-sfc": "3.6.0-rc.6",
     "oxfmt": "^0.68.0",
+    "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
     "vite": "^8.0.16",
     "vue-tsc": "^3.1.0"

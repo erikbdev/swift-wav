@@ -11,43 +11,11 @@ function formatTimestamp(timestamp: number) {
 </script>
 
 <template>
-  <div class="output">
-    <div v-if="!output.length" class="empty">No output.</div>
-    <div v-for="(entry, i) in output" :key="i" class="output-item">
-      <span class="output-timestamp">{{ formatTimestamp(entry.timestamp) }}</span>
-      <pre class="output-message">{{ entry.message }}</pre>
+  <div class="flex flex-col">
+    <div v-if="!output.length" class="p-3.5 font-mono text-[11px] text-text-3">No output.</div>
+    <div v-for="(entry, i) in output" :key="i" class="flex gap-2.5 border-b border-border-faint px-2.75 py-1.5 font-mono text-[11.5px] last:border-b-0">
+      <span class="shrink-0 text-text-3">{{ formatTimestamp(entry.timestamp) }}</span>
+      <pre class="overflow-x-auto whitespace-pre text-text-0">{{ entry.message }}</pre>
     </div>
   </div>
 </template>
-
-<style scoped>
-.output {
-  display: flex;
-  flex-direction: column;
-}
-.output-item {
-  display: flex;
-  gap: 10px;
-  padding: 6px 11px;
-  border-bottom: 1px solid var(--border-faint);
-  font: 11.5px var(--mono);
-}
-.output-item:last-child {
-  border-bottom: 0;
-}
-.output-timestamp {
-  flex-shrink: 0;
-  color: var(--text-3);
-}
-.output-message {
-  margin: 0;
-  overflow-x: auto;
-  white-space: pre;
-  color: var(--text-0);
-}
-.empty {
-  padding: 14px;
-  color: var(--text-3);
-  font: 11px var(--mono);
-}
-</style>

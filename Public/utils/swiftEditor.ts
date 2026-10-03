@@ -62,7 +62,7 @@ export function swiftEditorExtensions(options: { complete: CompletionProvider; o
           height: "100%",
           fontSize: "12.5px",
         },
-        ".cm-content": { caretColor: "#ff855f", fontFamily: "var(--mono)", padding: "12px 0" },
+        ".cm-content": { caretColor: "#ff855f", fontFamily: "var(--font-mono)", padding: "12px 0" },
         ".cm-cursor": { borderLeft: "2px solid #ff855f" },
         ".cm-dropCursor": { borderLeft: "2px solid #ff855f" },
         "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
@@ -75,7 +75,7 @@ export function swiftEditorExtensions(options: { complete: CompletionProvider; o
           color: "#5f5c55",
           border: "none",
         },
-        ".cm-scroller": { fontFamily: "var(--mono)" },
+        ".cm-scroller": { fontFamily: "var(--font-mono)" },
         // Argument placeholders inserted by completions, drawn as tokens
         // like Xcode's.
         ".cm-snippetField": {

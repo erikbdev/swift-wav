@@ -1,37 +1,45 @@
-:root {
-  color-scheme: dark;
-  --bg-0: #0c0b0a;
-  --bg-1: #161514;
-  --bg-2: #1b1a18;
-  --bg-3: #22211e;
-  --bg-4: #2a2926;
-  --bg-5: #343330;
-  --border: rgba(255, 244, 230, 0.08);
-  --border-strong: rgba(255, 244, 230, 0.16);
-  --border-faint: rgba(255, 244, 230, 0.05);
-  --text-0: #edece7;
-  --text-1: #a6a29a;
-  --text-2: #85817a;
-  --text-3: #5f5c55;
-  --accent: #ff6b45;
-  --accent-hi: #ff855f;
-  --accent-dim: rgba(255, 107, 69, 0.14);
-  --accent-line: rgba(255, 107, 69, 0.38);
-  --green: #46c07e;
-  --blue: #4aa3e8;
-  --amber: #d6a04a;
-  --red: #f0564a;
-  --purple: #a884f0;
-  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, sans-serif;
-  --mono: "CommitMono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  --r-sm: 6px;
-  --r-md: 9px;
-  --r-lg: 13px;
-  --topbar-h: 54px;
-  --status-h: 30px;
-  --tabbar-h: 40px;
+@import "tailwindcss";
+
+@theme {
+  --color-bg-0: #0c0b0a;
+  --color-bg-1: #161514;
+  --color-bg-2: #1b1a18;
+  --color-bg-3: #22211e;
+  --color-bg-4: #2a2926;
+  --color-bg-5: #343330;
+  --color-border: rgba(255, 244, 230, 0.08);
+  --color-border-strong: rgba(255, 244, 230, 0.16);
+  --color-border-faint: rgba(255, 244, 230, 0.05);
+  --color-text-0: #edece7;
+  --color-text-1: #a6a29a;
+  --color-text-2: #85817a;
+  --color-text-3: #5f5c55;
+  --color-accent: #ff6b45;
+  --color-accent-hi: #ff855f;
+  --color-accent-dim: rgba(255, 107, 69, 0.14);
+  --color-accent-line: rgba(255, 107, 69, 0.38);
+  --color-green: #46c07e;
+  --color-blue: #4aa3e8;
+  --color-amber: #d6a04a;
+  --color-red: #f0564a;
+  --color-purple: #a884f0;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, sans-serif;
+  --font-mono: "CommitMono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --radius-sm: 6px;
+  --radius-md: 9px;
+  --radius-lg: 13px;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 1px rgba(0, 0, 0, 0.18);
   --shadow-card: 0 6px 22px -8px rgba(0, 0, 0, 0.45), 0 2px 8px -3px rgba(0, 0, 0, 0.28);
+  --animate-indeterminate: indeterminate 1.2s ease-in-out infinite;
+
+  @keyframes indeterminate {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(333%);
+    }
+  }
 }
 
 @font-face {
@@ -43,22 +51,20 @@
   src: url("/fonts/CommitMono.woff2") format("woff2");
 }
 
-* {
-  box-sizing: border-box;
+:root {
+  color-scheme: dark;
 }
 
 html,
 body {
-  margin: 0;
   height: 100%;
-  background: var(--bg-0);
-  color: var(--text-0);
-  font-family: var(--sans);
-  font-size: 13px;
-  letter-spacing: -0.006em;
-  -webkit-font-smoothing: antialiased;
 }
 
-[hidden] {
-  display: none !important;
+body {
+  background: var(--color-bg-0);
+  color: var(--color-text-0);
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: -0.006em;
+  -webkit-font-smoothing: antialiased;
 }

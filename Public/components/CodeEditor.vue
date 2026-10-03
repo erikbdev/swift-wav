@@ -38,20 +38,5 @@ defineExpose({ reveal: editor.reveal, forgetFile: editor.forgetFile });
 </script>
 
 <template>
-  <div ref="host" class="code-editor"></div>
+  <div ref="host" class="min-h-0 flex-1 overflow-hidden bg-bg-1 [&_.cm-editor]:h-full [&_.cm-scroller]:overflow-auto"></div>
 </template>
-
-<style scoped>
-.code-editor {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  background: var(--bg-1);
-}
-.code-editor :deep(.cm-editor) {
-  height: 100%;
-}
-.code-editor :deep(.cm-scroller) {
-  overflow: auto;
-}
-</style>

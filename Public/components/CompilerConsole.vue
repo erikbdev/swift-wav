@@ -35,130 +35,42 @@ function toggle(panel: "diagnostics" | "output") {
 </script>
 
 <template>
-  <div class="console">
-    <div v-if="open" class="panel">
+  <div class="relative shrink-0">
+    <!-- Overlays the bottom of whatever sits above the console. -->
+    <div v-if="open" class="absolute inset-x-0 bottom-full z-10 max-h-[min(320px,45vh)] overflow-y-auto border border-b-0 border-border-strong bg-bg-2/98 shadow-card">
       <DiagnosticsList v-if="open === 'diagnostics'" :diagnostics="diagnostics" @reveal="emit('reveal', $event)" />
       <OutputList v-else :output="output" />
     </div>
 
-    <div class="bar">
-      <button class="toggle" :class="{ 'has-errors': errorCount, 'has-warnings': !errorCount && warningCount }" type="button" :aria-expanded="open === 'diagnostics'" @click="toggle('diagnostics')">
-        <span class="icon">{{ errorCount || warningCount ? "!" : "✓" }}</span>
+    <div class="flex min-h-7.5 items-center gap-2.5 border-t border-border bg-bg-2 px-2 font-mono text-[10.5px] text-text-2">
+      <button
+        class="inline-flex h-6 cursor-pointer items-center gap-1.75 rounded-sm border border-transparent px-2 text-text-1 hover:border-border hover:bg-bg-3 hover:text-text-0 aria-expanded:border-border aria-expanded:bg-bg-3 aria-expanded:text-text-0"
+        type="button"
+        :aria-expanded="open === 'diagnostics'"
+        @click="toggle('diagnostics')"
+      >
+        <span
+          class="inline-grid size-3.75 place-items-center rounded-full text-[10px] font-bold"
+          :class="errorCount ? 'bg-red text-white' : warningCount ? 'bg-amber text-bg-0' : 'bg-text-3 text-bg-0'"
+          >{{ errorCount || warningCount ? "!" : "✓" }}</span
+        >
         <span>Diagnostics</span>
-        <span class="count">{{ diagnostics.length }}</span>
+        <span class="min-w-4 rounded-[10px] bg-bg-4 px-1.25 py-px text-center text-text-1">{{ diagnostics.length }}</span>
       </button>
-      <button class="toggle" type="button" :aria-expanded="open === 'output'" @click="toggle('output')">
-        <span class="icon">›</span>
+      <button
+        class="inline-flex h-6 cursor-pointer items-center gap-1.75 rounded-sm border border-transparent px-2 text-text-1 hover:border-border hover:bg-bg-3 hover:text-text-0 aria-expanded:border-border aria-expanded:bg-bg-3 aria-expanded:text-text-0"
+        type="button"
+        :aria-expanded="open === 'output'"
+        @click="toggle('output')"
+      >
+        <span class="inline-grid size-3.75 place-items-center rounded-full bg-text-3 text-[10px] font-bold text-bg-0">›</span>
         <span>Output</span>
-        <span class="count">{{ output.length }}</span>
+        <span class="min-w-4 rounded-[10px] bg-bg-4 px-1.25 py-px text-center text-text-1">{{ output.length }}</span>
       </button>
-      <span v-if="activity" class="activity" role="status" aria-live="polite">
-        <span class="spinner" aria-hidden="true"></span>
+      <span v-if="activity" class="ml-auto inline-flex items-center gap-1.75 px-2 whitespace-nowrap text-text-2" role="status" aria-live="polite">
+        <span class="size-2.5 animate-spin rounded-full border border-border-strong border-t-accent-hi" aria-hidden="true"></span>
         {{ activity === "typechecking" ? "Type checking…" : "Building…" }}
       </span>
     </div>
   </div>
 </template>
-
-<style scoped>
-.console {
-  position: relative;
-  flex-shrink: 0;
-}
-
-/* Overlays the bottom of whatever sits above the console. */
-.panel {
-  position: absolute;
-  right: 0;
-  bottom: 100%;
-  left: 0;
-  z-index: 10;
-  max-height: min(320px, 45vh);
-  overflow-y: auto;
-  border: 1px solid var(--border-strong);
-  border-bottom: 0;
-  background: rgba(27, 26, 24, 0.98);
-  box-shadow: var(--shadow-card);
-}
-
-.bar {
-  display: flex;
-  align-items: center;
-  min-height: 30px;
-  padding: 0 8px;
-  gap: 10px;
-  background: var(--bg-2);
-  border-top: 1px solid var(--border);
-  color: var(--text-2);
-  font-family: var(--mono);
-  font-size: 10.5px;
-}
-.toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 24px;
-  padding: 0 8px;
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--text-1);
-  font: inherit;
-  cursor: pointer;
-}
-.toggle:hover,
-.toggle[aria-expanded="true"] {
-  background: var(--bg-3);
-  border-color: var(--border);
-  color: var(--text-0);
-}
-.icon {
-  display: inline-grid;
-  place-items: center;
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  background: var(--text-3);
-  color: var(--bg-0);
-  font-size: 10px;
-  font-weight: 700;
-}
-.toggle.has-errors .icon {
-  background: var(--red);
-  color: #fff;
-}
-.toggle.has-warnings .icon {
-  background: var(--amber);
-  color: var(--bg-0);
-}
-.count {
-  min-width: 16px;
-  padding: 1px 5px;
-  border-radius: 10px;
-  background: var(--bg-4);
-  color: var(--text-1);
-  text-align: center;
-}
-.activity {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  margin-left: auto;
-  padding: 0 8px;
-  color: var(--text-2);
-  white-space: nowrap;
-}
-.spinner {
-  width: 10px;
-  height: 10px;
-  border: 1px solid var(--border-strong);
-  border-top-color: var(--accent-hi);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>
